@@ -1,21 +1,18 @@
 <?php
-require_once 'config.php';
-require_once 'zoom_api.php';
+// get_zoom_data.php
+require_once __DIR__ . '/zoom_api.php';
 
-if (!isset($_SESSION['usuario'])) {
-    http_response_code(401);
-    echo json_encode(['error' => 'No autorizado']);
-    exit;
+$token = getZoomToken();
+if (is_array($token) && isset($token['error'])) {
+    die(json_encode($token, JSON_PRETTY_PRINT));
 }
 
-$zoom = new ZoomAPI();
-$userId = $_GET['user_id'] ?? '';
-
-$meetings = $zoom->getUserMeetings($userId);
-$recordings = $zoom->getUserRecordings($userId);
-
-echo json_encode([
-    'meetings' => $meetings,
-    'recordings' => $recordings
-]);
+// Probar endpoint de usuarios
+$result = zoomGet('https://api.zoom.us/v2/users?page_size=1', $token);
+if ($result['http_code'] == 200) {
+    echo "<h1>Conexión exitosa</h1>";
+    echo "<pre>" . json_encode(json_decode($result['response']), JSON_PRETTY_PRINT) . "</pre>";
+} else {
+    echo "Error: " . $result['http_code'] . " - " . $result['response'];
+}
 ?>

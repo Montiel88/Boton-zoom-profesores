@@ -1,15 +1,23 @@
 <?php
-// Configuración de la base de datos
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_NAME', 'tesa_zoom_db');
+// config.php
+function loadEnv() {
+    $envFile = __DIR__ . '/.env';
+    if (file_exists($envFile)) {
+        $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            if (strpos(trim($line), '#') === 0) continue;
+            if (strpos($line, '=') !== false) {
+                list($name, $value) = explode('=', $line, 2);
+                putenv(trim($name) . '=' . trim($value));
+                $_ENV[trim($name)] = trim($value);
+            }
+        }
+    }
+}
+loadEnv();
 
-// Credenciales de Zoom (¡LAS CORRECTAS!)
-define('ZOOM_ACCOUNT_ID', 'cuBS3SHYQN2W0XaNlJCgKw');
-define('ZOOM_CLIENT_ID', 's76tHS43TGfJYY6u6_YqQ');
-define('ZOOM_CLIENT_SECRET', '4N6SfLVjMfmRDEbYmb3rkxN3JbURAnP');
-
-// Iniciar sesión
-session_start();
+// Iniciar sesión si no está iniciada
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
 ?>

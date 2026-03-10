@@ -1,89 +1,90 @@
 <?php
-require_once 'config.php';
-
+// zoom_api.php
 class ZoomAPI {
-    private $access_token = null;
-    
-    public function getAccessToken() {
-        if ($this->access_token) return $this->access_token;
-        
-        $credentials = base64_encode(ZOOM_CLIENT_ID . ':' . ZOOM_CLIENT_SECRET);
-        $postData = http_build_query([
-            'grant_type' => 'account_credentials',
-            'account_id' => ZOOM_ACCOUNT_ID
-        ]);
-        
-        $ch = curl_init('https://zoom.us/oauth/token');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $postData,
-            CURLOPT_HTTPHEADER => [
-                'Authorization: Basic ' . $credentials,
-                'Content-Type: application/x-www-form-urlencoded'
-            ]
-        ]);
-        
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        if ($httpCode !== 200) return null;
-        
-        $data = json_decode($response, true);
-        $this->access_token = $data['access_token'] ?? null;
-        return $this->access_token;
+    private $account_id;
+    private $client_id;
+    private $client_secret;
+
+    public function __construct() {
+        $this->account_id = getenv('ZOOM_ACCOUNT_ID');
+        $this->client_id = getenv('ZOOM_CLIENT_ID');
+        $this->client_secret = getenv('ZOOM_CLIENT_SECRET');
     }
-    
+
+    private function getAccessToken() {
+        $auth = base64_encode($this->client_id . ':' . $this->client_secret);
+        $url = "https://zoom.us/oauth/token?grant_type=account_credentials&account_id={$this->account_id}";
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Basic ' . $auth]);
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($http_code !== 200) {
+            return null;
+        }
+        $data = json_decode($response, true);
+        return $data['access_token'] ?? null;
+    }
+
     public function getUsers() {
         $token = $this->getAccessToken();
         if (!$token) return [];
-        
-        $ch = curl_init('https://api.zoom.us/v2/users?page_size=300');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token]
-        ]);
-        
+
+        $url = "https://api.zoom.us/v2/users?page_size=300";
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . $token]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        
+
+        if ($http_code !== 200) return [];
         $data = json_decode($response, true);
         return $data['users'] ?? [];
     }
-    
+
     public function getUserMeetings($userId) {
         $token = $this->getAccessToken();
         if (!$token) return [];
-        
-        $ch = curl_init("https://api.zoom.us/v2/users/$userId/meetings?page_size=50");
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token]
-        ]);
-        
+
+        $url = "https://api.zoom.us/v2/users/{$userId}/meetings?page_size=100";
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . $token]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        
+
+        if ($http_code !== 200) return [];
         $data = json_decode($response, true);
         return $data['meetings'] ?? [];
     }
-    
+
     public function getUserRecordings($userId) {
         $token = $this->getAccessToken();
         if (!$token) return [];
-        
-        $ch = curl_init("https://api.zoom.us/v2/users/$userId/recordings?page_size=50");
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token]
-        ]);
-        
+
+        $url = "https://api.zoom.us/v2/users/{$userId}/recordings?page_size=100";
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . $token]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        
+
+        if ($http_code !== 200) return [];
         $data = json_decode($response, true);
         return $data['recordings'] ?? [];
+    }
+
+    public function testConnection() {
+        $token = $this->getAccessToken();
+        return $token !== null;
     }
 }
 ?>

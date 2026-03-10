@@ -9,23 +9,19 @@ if (isset($_SESSION['usuario'])) {
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $usuario = $_POST['usuario'] ?? '';
-    $password = $_POST['password'] ?? '';
-    
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-    $stmt = $conn->prepare("SELECT * FROM usuarios WHERE usuario = ?");
-    $stmt->bind_param("s", $usuario);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $user = $result->fetch_assoc();
-    
-    if ($user && password_verify($password, $user['password'])) {
-        $_SESSION['usuario'] = $user['usuario'];
+    $usuario = trim($_POST['usuario'] ?? '');
+    $password = trim($_POST['password'] ?? '');
+
+    $expected_user = getenv('APP_USER') ?: 'admin';
+    $expected_pass = getenv('APP_PASSWORD') ?: 'admin123';
+
+    if ($usuario === $expected_user && $password === $expected_pass) {
+        $_SESSION['usuario'] = $usuario;
         header('Location: index.php');
         exit;
-    } else {
-        $error = 'Usuario o contraseña incorrectos';
     }
+
+    $error = 'Usuario o contraseña incorrectos';
 }
 ?>
 <!DOCTYPE html>

@@ -2,11 +2,11 @@
 require_once 'config.php';
 require_once 'zoom_api.php';
 
-// Verificar si el usuario está logueado
-if (!isset($_SESSION['usuario'])) {
-    header('Location: login.php');
-    exit;
-}
+// Verificar si el usuario está logueado (puedes desactivar esto para pruebas)
+// if (!isset($_SESSION['usuario'])) {
+//     header('Location: login.php');
+//     exit;
+// }
 
 $zoom = new ZoomAPI();
 $users = $zoom->getUsers();
@@ -17,66 +17,72 @@ $users = $zoom->getUsers();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TESA Zoom Monitor - Dashboard</title>
-    <link rel="stylesheet" href="style.css">
     <style>
-        /* Estilos adicionales específicos */
-        .btn-zoom-header {
-            display: inline-flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(135deg, #0e5c8f, #1a8cff);
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            margin-right: 15px;
-            border: 2px solid rgba(255,255,255,0.3);
-            cursor: pointer;
-            transition: 0.3s;
-        }
-        
-        .btn-zoom-header:hover {
-            transform: translateY(-3px);
-            background: linear-gradient(135deg, #1a8cff, #0e5c8f);
-        }
-        
-        .btn-zoom-header .zoom-icon {
-            font-size: 24px;
-        }
-        
-        .btn-zoom-header .zoom-text {
-            font-size: 10px;
-            font-weight: bold;
-            text-transform: uppercase;
-            margin-top: 2px;
-        }
-        
-        .logo-container {
-            display: flex;
-            align-items: center;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .logo-container { display: flex; align-items: center; gap: 15px; }
+        .btn-zoom-header { background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.3); border-radius: 10px; padding: 10px; text-align: center; cursor: pointer; transition: 0.3s; width: 60px; }
+        .btn-zoom-header:hover { background: rgba(255,255,255,0.3); transform: translateY(-2px); }
+        .zoom-icon { font-size: 24px; }
+        .zoom-text { font-size: 10px; font-weight: bold; text-transform: uppercase; }
+        .logo-icon { font-size: 40px; }
+        h1 { font-size: 1.5rem; }
+        .user-info { display: flex; align-items: center; gap: 20px; }
+        .btn-logout { background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 5px; text-decoration: none; color: white; }
+        .btn-logout:hover { background: rgba(255,255,255,0.3); }
+        .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+        .section-title { font-size: 1.8rem; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .profesores-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; transition: 0.3s; }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
+        .card h3 { margin-bottom: 10px; color: #2c3e50; }
+        .card p { color: #7f8c8d; margin-bottom: 15px; }
+        .card-stats { display: flex; gap: 10px; font-size: 0.9rem; color: #34495e; }
+        .stat { background: #ecf0f1; padding: 5px 10px; border-radius: 15px; }
+        .empty-state { text-align: center; padding: 50px; background: white; border-radius: 10px; grid-column: 1/-1; }
+        .empty-state-icon { font-size: 60px; margin-bottom: 20px; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+        .modal-content { background: white; margin: 5% auto; padding: 30px; border-radius: 10px; width: 90%; max-width: 800px; max-height: 80vh; overflow-y: auto; position: relative; }
+        .modal-close { position: absolute; right: 20px; top: 15px; font-size: 28px; cursor: pointer; }
+        .loading { text-align: center; padding: 30px; }
+        .loading-spinner { border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .meeting-item { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #667eea; }
+        .meeting-title { font-weight: bold; margin-bottom: 5px; }
+        .meeting-date { font-size: 0.9rem; color: #555; margin: 2px 0; }
+        .recording-links { margin-top: 10px; }
+        .btn-download { display: inline-block; background: #27ae60; color: white; padding: 5px 10px; border-radius: 5px; text-decoration: none; margin-right: 5px; font-size: 0.8rem; }
+        .btn-download:hover { background: #2ecc71; }
+        .test-button { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 20px; }
+        .test-button:hover { background: #2980b9; }
+        .alert { padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     </style>
 </head>
 <body>
     <header class="header">
         <div class="logo-container">
-            <!-- EL BOTÓN DE ZOOM QUE TANTO BUSCABAS -->
-            <a href="#" id="btn-zoom-header" class="btn-zoom-header" onclick="mostrarTodosLosZoom()">
+            <!-- BOTÓN ZOOM (para vista general) -->
+            <div class="btn-zoom-header" onclick="mostrarTodosLosZoom()">
                 <span class="zoom-icon">🎥</span>
                 <span class="zoom-text">Zoom</span>
-            </a>
+            </div>
             <div class="logo-icon">📚</div>
             <h1>TESA Zoom Monitor</h1>
         </div>
         <div class="user-info">
-            <span class="user-name">👤 <?php echo htmlspecialchars($_SESSION['usuario']); ?></span>
+            <span class="user-name">👤 <?php echo isset($_SESSION['usuario']) ? htmlspecialchars($_SESSION['usuario']) : 'Invitado'; ?></span>
             <a href="logout.php" class="btn-logout">Salir</a>
         </div>
     </header>
 
     <main class="container">
+        <!-- BOTÓN PARA PROBAR API -->
+        <button id="test-api-btn" class="test-button">🔌 Probar conexión con Zoom API</button>
+        <div id="test-result"></div>
+
         <h2 class="section-title">
             <span>📹</span>
             Profesores en Zoom (<?php echo count($users); ?>)
@@ -96,8 +102,8 @@ $users = $zoom->getUsers();
                     <p><?php echo htmlspecialchars($user['email']); ?></p>
                     <div class="card-stats">
                         <span class="stat">🆔 <?php echo substr($user['id'], 0, 8); ?>...</span>
-                        <span class="stat">📊 <?php echo $user['status']; ?></span>
-                        <span class="stat">📅 <?php echo date('d/m/Y', strtotime($user['created_at'])); ?></span>
+                        <span class="stat">📊 <?php echo $user['status'] ?? 'active'; ?></span>
+                        <span class="stat">📅 <?php echo isset($user['created_at']) ? date('d/m/Y', strtotime($user['created_at'])) : 'N/A'; ?></span>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -105,7 +111,7 @@ $users = $zoom->getUsers();
         </div>
     </main>
 
-    <!-- Modal para mostrar detalles del profesor -->
+    <!-- Modal para detalles del profesor -->
     <div id="modal" class="modal">
         <div class="modal-content">
             <span class="modal-close" onclick="cerrarModal()">&times;</span>
@@ -118,7 +124,7 @@ $users = $zoom->getUsers();
         </div>
     </div>
 
-    <!-- Modal para mostrar TODOS los Zoom (vista general) -->
+    <!-- Modal para vista general de todos los Zoom -->
     <div id="modal-todos" class="modal">
         <div class="modal-content" style="max-width: 1000px;">
             <span class="modal-close" onclick="cerrarModalTodos()">&times;</span>
@@ -132,6 +138,26 @@ $users = $zoom->getUsers();
     </div>
 
     <script>
+        // Función para probar la API
+        document.getElementById('test-api-btn').addEventListener('click', async function() {
+            const resultDiv = document.getElementById('test-result');
+            resultDiv.innerHTML = '<div class="loading"><div class="loading-spinner"></div> Probando conexión...</div>';
+            
+            try {
+                // Llamamos a un endpoint simple que pruebe la conexión
+                const response = await fetch('test_connection.php');
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `<div class="alert alert-success">✅ ${data.message}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-error">❌ ${data.message}</div>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="alert alert-error">❌ Error de conexión: ${e.message}</div>`;
+            }
+        });
+
         async function verProfesor(user) {
             document.getElementById('modal').style.display = 'block';
             document.getElementById('modal-content').innerHTML = `
@@ -149,7 +175,7 @@ $users = $zoom->getUsers();
                     <h2>${user.first_name} ${user.last_name || ''}</h2>
                     <p><strong>Email:</strong> ${user.email}</p>
                     <p><strong>ID Zoom:</strong> ${user.id}</p>
-                    <p><strong>Fecha de creación:</strong> ${new Date(user.created_at).toLocaleDateString()}</p>
+                    <p><strong>Fecha de creación:</strong> ${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</p>
                     
                     <h3>📅 Reuniones programadas (${data.meetings?.length || 0})</h3>
                 `;
