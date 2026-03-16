@@ -1,0 +1,791 @@
+// assets/js/main.js
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('profesor-search');
+    const btnBuscar = document.getElementById('btn-buscar');
+    const container = document.getElementById('profesores-container');
+    const resultCount = document.getElementById('result-count');
+    const syncOverlay = document.getElementById('premium-loader');
+    const progressBar = document.getElementById('loader-fill');
+    const timerSpan = document.getElementById('timer');
+
+    let syncInterval;
+    let seconds = 0;
+
+    let currentProfesores = []; // Guardar datos para el modal
+
+    const updateLoaderText = (text) => {
+        const statusElement = document.querySelector('.loader-status');
+        statusElement.textContent = text;
+    };
+
+    const performSearch = async () => {
+        const query = searchInput.value.trim();
+        if (!query) {
+            alert("Por favor ingresa un nombre o correo.");
+            return;
+        }
+
+        // Iniciar Overlay
+        syncOverlay.style.display = 'flex';
+        updateLoaderText("Buscando profesores...");
+        seconds = 0;
+        progressBar.style.width = '0%';
+        timerSpan.textContent = '0s';
+        
+        // Ocultar Dashboard y Buscador para dar efecto de "nueva página"
+        document.getElementById('dashboard-stats').style.display = 'none';
+        document.querySelector('.search-section').style.display = 'none';
+        
+        container.innerHTML = `<tr><td colspan="6"><div class="skeleton-row"></div></td></tr>`;
+
+        syncInterval = setInterval(() => {
+            seconds++;
+            timerSpan.textContent = `${seconds}s`;
+            if (seconds < 5) progressBar.style.width = `${seconds * 20}%`;
+        }, 1000);
+
+        try {
+            const apiUrl = `api/search_professor.php?query=${encodeURIComponent(query)}`;
+            console.log("Consultando API:", apiUrl);
+            const response = await fetch(apiUrl);
+            
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                // Si no es JSON, lanzamos el error de estado
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                throw new Error("Respuesta del servidor no es JSON válido");
+            }
+
+            if (!response.ok) {
+                throw new Error(data.error || `HTTP error! status: ${response.status}`);
+            }
+
+            clearInterval(syncInterval);
+            progressBar.style.width = '100%';
+            
+            setTimeout(() => {
+                syncOverlay.style.display = 'none';
+                
+                if (data.error) {
+                    alert("Error: " + data.error);
+                    return;
+                }
+
+                if (data.domain_stats) {
+                    document.getElementById('stat-tesa').textContent = data.domain_stats.tesa || 0;
+                    document.getElementById('stat-itsa').textContent = data.domain_stats.itsa || 0;
+                }
+
+                currentProfesores = data.profesores || [];
+                resultCount.textContent = `${currentProfesores.length} resultados`;
+                
+                // Mostrar sección de resultados
+                document.getElementById('results-section').style.display = 'block';
+
+                if (currentProfesores.length === 0) {
+                    container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 3rem; color: var(--gray);">No se encontraron profesores</td></tr>`;
+                    return;
+                }
+
+                container.innerHTML = '';
+                currentProfesores.forEach((p, index) => {
+                    const pic = p.pic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(p.profesor) + '&background=4f46e5&color=fff';
+                    const row = document.createElement('tr');
+                    row.className = 'animate-fade-in';
+                    
+                    row.innerHTML = `
+                        <td style="text-align: center; padding: 1rem;">
+                            <img src="${pic}" style="width: 45px; height: 45px; border-radius: 12px; object-fit: cover;">
+                        </td>
+                        <td style="font-weight: 700;">${p.profesor}</td>
+                        <td>${p.email}</td>
+                        <td style="text-align: center;">
+                            <span class="badge-status ${p.status === 'active' ? 'badge-active' : 'badge-inactive'}">${p.status.toUpperCase()}</span>
+                        </td>
+                        <td style="text-align: center; font-size: 0.85rem; font-weight: 600; color: #64748b;">${p.timezone}</td>
+                        <td style="text-align: center;">
+                            <button onclick='verDetalles(${index})' class="btn-action">💎 Consultar Clases</button>
+                        </td>
+                    `;
+                    container.appendChild(row);
+                });
+            }, 500);
+
+        } catch (e) {
+            clearInterval(syncInterval);
+            syncOverlay.style.display = 'none';
+            alert(`Error de conexión al servidor: ${e.message}`);
+            console.error("Detalle del error:", e);
+        }
+    };
+
+    // Carga inicial para llenar el dashboard
+    const loadDashboardStats = async () => {
+        try {
+            const response = await fetch(`api/search_professor.php?query=*`);
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.domain_stats) {
+                document.getElementById('stat-tesa').textContent = data.domain_stats.tesa || 0;
+                document.getElementById('stat-itsa').textContent = data.domain_stats.itsa || 0;
+            }
+            if (data.live_count !== undefined) {
+                document.getElementById('stat-live').textContent = data.live_count || 0;
+            }
+        } catch (e) {
+            console.error("Error cargando estadísticas iniciales:", e.message);
+        }
+    };
+
+    loadDashboardStats();
+    // Actualizar live count cada 2 minutos
+    setInterval(loadDashboardStats, 120000);
+
+    btnBuscar.addEventListener('click', performSearch);
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            performSearch();
+        }
+    });
+
+    window.verDetalles = function(index) {
+        const p = currentProfesores[index];
+        const modal = document.getElementById('modal');
+        const content = document.getElementById('modal-body');
+        
+        // Resetear datos para evitar que se vea el profesor anterior
+        currentProfessorLists = { past: [], present: [], future: [] };
+        
+        modal.style.display = 'flex';
+        modal.classList.add('modal-consulta');
+
+        const pic = p.pic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(p.profesor) + '&background=fff&color=6366f1&size=128';
+
+        content.innerHTML = `
+            <div class="modal-header-prof animate-fade-in" style="display: flex; align-items: center; gap: 2.5rem; text-align: left; padding: 2.5rem 4rem; position: relative; flex-wrap: wrap; justify-content: center;">
+                <img src="${pic}" class="prof-pic-large" style="width: 110px; height: 110px; border-radius: 30px; border: 5px solid rgba(255,255,255,0.4); box-shadow: 0 15px 30px rgba(0,0,0,0.3); object-fit: cover;">
+                <div style="flex: 1; min-width: 200px;">
+                    <h2 style="margin:0; font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; text-shadow: 0 2px 10px rgba(0,0,0,0.2);">${p.profesor}</h2>
+                    <div style="margin-top: 0.5rem; display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; justify-content: center;">
+                        <span style="opacity: 0.9; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; font-weight: 500; word-break: break-all;">
+                            <i class="fas fa-envelope"></i> ${p.email}
+                        </span>
+                        <span style="background: rgba(255,255,255,0.2); padding: 0.3rem 1rem; border-radius: 100px; font-size: 0.85rem; font-weight: 700; border: 1px solid rgba(255,255,255,0.1); white-space: nowrap;">
+                            <i class="fas fa-clock"></i> ${p.timezone}
+                        </span>
+                    </div>
+                </div>
+                <span class="modal-close" onclick="cerrarModal()">&times;</span>
+            </div>
+            
+            <div class="modal-body-prof animate-fade-in">
+                <!-- Tarjetas de Métricas Interactivas -->
+                <div class="metrics-row">
+                    <div class="metric-card-btn" onclick="filtrarPorTipo('past')" id="metric-past" style="cursor:pointer; background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 1.5rem; text-align: center; transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div style="color: #64748b; font-weight: 800; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            ⏪ CLASES PASADAS
+                        </div>
+                        <div class="metric-value" id="count-past" style="font-size: 2.5rem; font-weight: 900; color: #1e293b; background: linear-gradient(135deg, #1e293b 0%, #64748b 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0</div>
+                    </div>
+                    <div class="metric-card-btn" onclick="filtrarPorTipo('present')" id="metric-present" style="cursor:pointer; background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 1.5rem; text-align: center; transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div style="color: #10b981; font-weight: 800; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            🟢 CLASES EN VIVO
+                        </div>
+                        <div class="metric-value" id="count-present" style="font-size: 2.5rem; font-weight: 900; color: #1e293b; background: linear-gradient(135deg, #10b981 0%, #059669 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0</div>
+                    </div>
+                    <div class="metric-card-btn" onclick="filtrarPorTipo('future')" id="metric-future" style="cursor:pointer; background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 1.5rem; text-align: center; transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        <div style="color: #6366f1; font-weight: 800; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            ⏩ CLASES FUTURAS
+                        </div>
+                        <div class="metric-value" id="count-future" style="font-size: 2.5rem; font-weight: 900; color: #1e293b; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0</div>
+                    </div>
+                </div>
+
+                <!-- Filtros Avanzados - GRID MEJORADO -->
+                <div class="modal-filters-grid">
+                    <div class="filter-group">
+                        <label>Desde</label>
+                        <input type="date" id="filter-from" class="search-input" style="padding: 0.6rem; font-size: 0.85rem;" value="${new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}">
+                    </div>
+                    <div class="filter-group">
+                        <label>Hasta</label>
+                        <input type="date" id="filter-to" class="search-input" style="padding: 0.6rem; font-size: 0.85rem;" value="${new Date().toISOString().split('T')[0]}">
+                    </div>
+                    <div class="filter-group">
+                        <label>Módulo / Periodo</label>
+                        <input type="text" id="filter-module" class="search-input filter-enter-action" style="padding: 0.6rem; font-size: 0.85rem;" placeholder="Ej: 26.S1">
+                    </div>
+                    <div class="filter-group">
+                        <label>Nombre de Clase</label>
+                        <input type="text" id="filter-class" class="search-input filter-enter-action" style="padding: 0.6rem; font-size: 0.85rem;" placeholder="Buscar reunión...">
+                    </div>
+                </div>
+
+                <!-- Barra de Acciones -->
+                <div class="modal-actions-bar">
+                    <button id="btn-consultar-zoom" onclick="cargarClasesDetalle('${p.id}')" class="btn-buscar" style="padding: 0.8rem 2rem; font-size: 0.95rem;">
+                        🔍 CONSULTAR ZOOM
+                    </button>
+                    <button onclick="exportarExcel('${p.profesor}')" class="btn-action" style="background: #16a34a; padding: 0.8rem 1.5rem; display: flex; align-items: center; gap: 8px;">
+                        📊 Exportar Reporte Excel
+                    </button>
+                </div>
+
+                <div id="desglose-container">
+                    <div id="desglose-content" class="table-responsive">
+                        <div style="text-align:center; padding: 3rem; color: #64748b;">
+                            Cargando historial de clases...
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 3rem; display: flex; justify-content: center; padding-bottom: 2rem;">
+                    <button class="btn-cerrar-modal" onclick="cerrarModal()">
+                        <i class="fas fa-times-circle"></i> Cerrar Consulta Detallada
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Cargar clases inicialmente
+        cargarClasesDetalle(p.id);
+
+        // Habilitar Enter en los filtros del modal
+        setTimeout(() => {
+            const modalFilters = document.querySelectorAll('.filter-enter-action');
+            modalFilters.forEach(input => {
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const btnConsultar = document.getElementById('btn-consultar-zoom');
+                        if (btnConsultar) btnConsultar.click();
+                    }
+                });
+            });
+        }, 100);
+    };
+
+    let currentProfessorLists = { past: [], present: [], future: [] };
+    let currentCategory = 'past';
+
+    window.cargarClasesDetalle = async function(userId) {
+        const content = document.getElementById('desglose-content');
+        const fromInput = document.getElementById('filter-from');
+        const toInput = document.getElementById('filter-to');
+        
+        if (!fromInput || !toInput) return;
+
+        const from = fromInput.value;
+        const to = toInput.value;
+
+        // Loader más bonito y dinámico dentro del modal
+        content.innerHTML = `
+            <div class="loader-container-modern animate-fade-in">
+                <div class="loader-pulse"></div>
+                <div class="loader-text-modern">
+                    <span class="main-msg">Conectando con Zoom Cloud...</span>
+                    <span class="sub-msg">Sincronizando métricas y grabaciones</span>
+                </div>
+            </div>
+        `;
+
+        // Deshabilitar botones de métricas durante la carga
+        document.querySelectorAll('.metric-card-btn').forEach(b => {
+            b.style.opacity = '0.5';
+            b.style.pointerEvents = 'none';
+        });
+
+        try {
+            const response = await fetch(`api/get_professor_meetings.php?userId=${userId}&from=${from}&to=${to}`);
+            const data = await response.json();
+
+            // Reactivar botones
+            document.querySelectorAll('.metric-card-btn').forEach(b => {
+                b.style.opacity = '1';
+                b.style.pointerEvents = 'auto';
+            });
+
+            if (data.error) {
+                content.innerHTML = `<div style="color: var(--danger); text-align:center; padding: 2rem;">Error: ${data.error}</div>`;
+                return;
+            }
+
+            // Actualizar contadores
+            if (data.stats) {
+                const cPast = document.getElementById('count-past');
+                const cPresent = document.getElementById('count-present');
+                const cFuture = document.getElementById('count-future');
+                
+                if (cPast) cPast.textContent = data.stats.past || 0;
+                if (cPresent) cPresent.textContent = data.stats.present || 0;
+                if (cFuture) cFuture.textContent = data.stats.future || 0;
+            }
+
+            // Guardar listas
+            currentProfessorLists = data.lists || { past: [], present: [], future: [] };
+            
+            // Si hay clases en vivo, mostrar esas por defecto, si no las pasadas
+            if (currentProfessorLists.present && currentProfessorLists.present.length > 0) {
+                filtrarPorTipo('present');
+            } else {
+                filtrarPorTipo('past');
+            }
+
+        } catch (e) {
+            // Reactivar botones incluso en error
+            document.querySelectorAll('.metric-card-btn').forEach(b => {
+                b.style.opacity = '1';
+                b.style.pointerEvents = 'auto';
+            });
+            content.innerHTML = '<div style="color: var(--danger); text-align:center; padding: 2rem;">Error al conectar con el servidor</div>';
+        }
+    };
+
+    window.filtrarPorTipo = function(type) {
+        const content = document.getElementById('desglose-content');
+        if (!currentProfessorLists || !currentProfessorLists[type]) {
+            if (content) content.innerHTML = '<div style="text-align:center; padding: 2rem; color: var(--danger);">Los datos no se han cargado correctamente. Intenta consultar de nuevo.</div>';
+            return;
+        }
+        
+        currentCategory = type;
+        
+        // Resetear estilos de todas las tarjetas
+        document.querySelectorAll('.metric-card-btn').forEach(card => {
+            card.style.transform = 'scale(1)';
+            card.style.borderColor = '#e2e8f0';
+            card.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.1)';
+            card.style.background = 'white';
+        });
+
+        // Resaltar la seleccionada
+        const targetId = `metric-${type}`;
+        const selectedCard = document.getElementById(targetId);
+        if (selectedCard) {
+            selectedCard.style.transform = 'scale(1.05)';
+            selectedCard.style.borderColor = 'var(--primary)';
+            selectedCard.style.boxShadow = '0 10px 20px -5px rgba(123, 44, 191, 0.2)';
+            selectedCard.style.background = '#f5f3ff';
+            selectedCard.style.zIndex = '5';
+        }
+
+        let meetings = currentProfessorLists[type] || [];
+        
+        // Aplicar filtros manuales (Módulo y Clase)
+        const moduleInput = document.getElementById('filter-module');
+        const classInput = document.getElementById('filter-class');
+        
+        const moduleFilter = moduleInput ? moduleInput.value.trim().toLowerCase() : '';
+        const classFilter = classInput ? classInput.value.trim().toLowerCase() : '';
+        
+        if (moduleFilter || classFilter) {
+            meetings = meetings.filter(m => {
+                const topic = (m.topic || m.reunion || '').toLowerCase();
+                const matchesModule = !moduleFilter || topic.includes(moduleFilter);
+                const matchesClass = !classFilter || topic.includes(classFilter);
+                return matchesModule && matchesClass;
+            });
+        }
+
+        renderizarTablaReuniones(meetings, type);
+    };
+
+    window.renderizarTablaReuniones = function(meetings, type) {
+        const content = document.getElementById('desglose-content');
+        
+        if (meetings.length === 0) {
+            content.innerHTML = '<div style="text-align:center; padding: 3rem; color: #64748b;">No hay reuniones en esta categoría.</div>';
+            return;
+        }
+
+        let html = '<table id="tabla-clases-detalle" style="width:100%; border-collapse: collapse; font-size: 1rem;">';
+        html += `
+            <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                <tr>
+                    <th style="padding: 1.2rem 1rem; text-align: left; border-bottom: 2px solid #e2e8f0;">REUNIÓN</th>
+                    <th style="padding: 1.2rem 1rem; text-align: center; border-bottom: 2px solid #e2e8f0;">INICIO</th>
+                    <th style="padding: 1.2rem 1rem; text-align: center; border-bottom: 2px solid #e2e8f0;">DURACIÓN</th>
+                    <th style="padding: 1.2rem 1rem; text-align: center; border-bottom: 2px solid #e2e8f0;">FIN</th>
+                    <th style="padding: 1.2rem 1rem; text-align: center; border-bottom: 2px solid #e2e8f0;">${type === 'past' ? 'ASISTENCIA' : 'ESTADO'}</th>
+                    <th style="padding: 1.2rem 1rem; text-align: center; border-bottom: 2px solid #e2e8f0;">GRABÓ</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        meetings.forEach(m => {
+            const grabado = m.grabado ? '<span style="color: var(--success); font-weight: bold;">✅</span>' : '<span style="color: var(--danger); font-weight: bold;">❌</span>';
+            const meetingTopic = m.topic || m.reunion;
+            const safeTopic = meetingTopic.replace(/'/g, "\\'");
+            const meetingId = m.uuid || m.reunion_id;
+            
+            // Botón dinámico según tipo
+            let accionBtn = '';
+            if (type === 'past') {
+                accionBtn = `
+                    <button onclick="verParticipantes('${meetingId}', '${safeTopic}')" class="badge-count" style="cursor:pointer; border: 1px solid var(--primary); background: #f5f3ff; color: var(--primary);">
+                        👥 ${m.participantes}
+                    </button>
+                `;
+            } else {
+                // Para clases presentes o futuras, no mostramos botón de iniciar (solo consulta)
+                accionBtn = `<span style="font-size: 0.75rem; color: var(--gray); font-style: italic;">Consulta habilitada</span>`;
+            }
+
+            html += `
+                <tr>
+                    <td style="padding: 1rem; border-bottom: 1px solid #f1f5f9;">
+                        <div style="font-weight: 700; color: var(--primary-dark);">${meetingTopic}</div>
+                        <div style="font-size: 0.75rem; color: var(--gray);">${m.reunion_id}</div>
+                    </td>
+                    <td style="padding: 1rem; border-bottom: 1px solid #f1f5f9; text-align: center; font-size: 0.85rem;">
+                        ${m.inicio ? new Date(m.inicio).toLocaleString('es-EC', { hour12: false }) : 'Recurrente'}
+                    </td>
+                    <td style="padding: 1rem; border-bottom: 1px solid #f1f5f9; text-align: center; font-family: monospace; font-weight: 600;">
+                        ${m.duracion}
+                    </td>
+                    <td style="padding: 1rem; border-bottom: 1px solid #f1f5f9; text-align: center; font-size: 0.85rem;">
+                        ${m.fin ? new Date(m.fin).toLocaleTimeString('es-EC', { hour12: false }) : 'N/A'}
+                    </td>
+                    <td style="padding: 1rem; border-bottom: 1px solid #f1f5f9; text-align: center;">
+                        ${accionBtn}
+                    </td>
+                    <td style="padding: 1rem; border-bottom: 1px solid #f1f5f9; text-align: center;">
+                        ${grabado}
+                    </td>
+                </tr>
+            `;
+        });
+        html += '</tbody></table>';
+        content.innerHTML = html;
+    };
+
+    window.verParticipantes = async function(meetingId, topic) {
+        const modal = document.getElementById('modal-participantes');
+        const content = document.getElementById('participantes-content');
+        const title = document.getElementById('meeting-topic-title');
+        
+        modal.style.display = 'flex';
+        title.textContent = topic;
+        
+        // Loader moderno y rápido para asistencia
+        content.innerHTML = `
+            <div class="loader-container-modern animate-fade-in" style="padding: 2rem;">
+                <div class="loader-pulse" style="width: 40px; height: 40px;"></div>
+                <div class="loader-text-modern">
+                    <span class="main-msg" style="font-size: 1.1rem;">Obteniendo lista de asistencia...</span>
+                </div>
+            </div>
+        `;
+
+        try {
+            const response = await fetch(`api/get_professor_meetings.php?meetingId=${encodeURIComponent(meetingId)}&type=participants_list`);
+            const data = await response.json();
+
+            if (data.error) {
+                content.innerHTML = `<div style="color: var(--danger); text-align:center; padding: 1rem;">${data.error}</div>`;
+                return;
+            }
+
+            const list = data.participants || [];
+            if (list.length === 0) {
+                content.innerHTML = '<div style="text-align:center; padding: 2rem;">No hay registros de participantes para esta clase.</div>';
+                return;
+            }
+
+            let html = '<table style="width:100%; font-size: 0.9rem; border-collapse: collapse;">';
+            html += '<thead style="background: #f1f5f9;"><tr><th style="padding: 8px; text-align:left;">NOMBRE</th><th style="padding: 8px; text-align:center;">DURACIÓN</th><th style="padding: 8px; text-align:center;">CONEXIÓN</th></tr></thead><tbody>';
+            
+            list.forEach(p => {
+                html += `
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                            <div style="font-weight:600;">${p.name}</div>
+                            <div style="font-size: 0.75rem; color: #64748b;">${p.email}</div>
+                        </td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align:center; font-weight:700; color: var(--success);">${p.duration}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align:center; font-size: 0.8rem;">${new Date(p.join_time).toLocaleTimeString()}</td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table>';
+            content.innerHTML = html;
+
+        } catch (e) {
+            content.innerHTML = '<div style="color: var(--danger); text-align:center; padding: 1rem;">Error al cargar participantes</div>';
+        }
+    };
+
+    window.cerrarModalParticipantes = function() {
+        document.getElementById('modal-participantes').style.display = 'none';
+    };
+
+    window.exportarExcel = function(profesor) {
+        const table = document.getElementById('tabla-clases-detalle');
+        if (!table) return;
+
+        let csv = [];
+        const rows = table.querySelectorAll('tr');
+        
+        // Encabezados con BOM para que Excel reconozca tildes y caracteres especiales
+        const BOM = "\uFEFF";
+        
+        for (let i = 0; i < rows.length; i++) {
+            let row = [], cols = rows[i].querySelectorAll('td, th');
+            for (let j = 0; j < cols.length; j++) {
+                // Limpiar el texto: quitar saltos de línea, comas internas y convertir iconos
+                let text = cols[j].innerText
+                    .replace(/(\r\n|\n|\r)/gm, " ")
+                    .replace(/"/g, '""') // Escapar comillas dobles
+                    .replace(/✅/g, "SI")
+                    .replace(/❌/g, "NO")
+                    .replace(/👥/g, "")
+                    .trim();
+                row.push('"' + text + '"');
+            }
+            csv.push(row.join(";")); // Usamos punto y coma para Excel en español
+        }
+
+        const csvContent = BOM + csv.join("\r\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement("a");
+        const fecha = new Date().toISOString().split('T')[0];
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Reporte_Zoom_${profesor.replace(/ /g, "_")}_${fecha}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    window.verDesglose = async function(userId, type) {
+        const container = document.getElementById('desglose-container');
+        const content = document.getElementById('desglose-content');
+        const title = document.getElementById('desglose-title');
+        
+        if (container) container.style.display = 'block';
+        content.innerHTML = '<div style="text-align:center; padding: 2rem; color: #64748b;"><div class="loader-icon" style="width:40px; height:40px; margin: 0 auto 1rem;"></div>Consultando API de Zoom...</div>';
+        
+        const titles = {
+            'scheduled': '📅 Próximas Reuniones Programadas',
+            'recurring': '🔄 Reuniones Recurrentes (Syllabus)',
+            'past': '👥 Historial de Clases y Participantes'
+        };
+        title.textContent = titles[type];
+
+        try {
+            const response = await fetch(`api/get_professor_meetings.php?userId=${userId}&type=${type}`);
+            const data = await response.json();
+
+            if (data.error) {
+                content.innerHTML = `<div style="color: var(--danger); text-align:center; padding: 1rem;">Error: ${data.error}</div>`;
+                return;
+            }
+
+            const meetings = data.meetings || [];
+            if (meetings.length === 0) {
+                content.innerHTML = '<div style="text-align:center; padding: 2rem; color: #64748b;">No se encontraron registros para esta categoría.</div>';
+                return;
+            }
+
+            let html = '<table style="width:100%; font-size: 0.85rem;">';
+            html += '<thead style="background: #f8fafc;"><tr><th style="padding: 0.5rem;">TEMA / CLASE</th><th style="padding: 0.5rem; text-align:center;">' + (type === 'past' ? 'PARTICIPANTES' : 'FECHA/HORA') + '</th></tr></thead><tbody>';
+            
+            meetings.forEach(m => {
+                let info = '';
+                if (type === 'past') {
+                    // Usamos btoa para pasar el UUID de forma segura en el onclick si tiene caracteres raros
+                    const safeId = btoa(m.id);
+                    info = `<button onclick="verAsistentes('${safeId}')" class="badge-count" style="background: #e0f2fe; color: #0369a1; border:none; cursor:pointer; width:100%; justify-content:center;">👥 ${m.participants} (Ver lista)</button>`;
+                } else {
+                    info = m.start_time !== 'Recurrente' ? new Date(m.start_time).toLocaleString() : 'Fija / Recurrente';
+                }
+
+                html += `
+                    <tr>
+                        <td style="padding: 0.75rem; border-bottom: 1px solid #f1f5f9; font-weight: 500;">${m.topic}</td>
+                        <td style="padding: 0.75rem; border-bottom: 1px solid #f1f5f9; text-align:center; font-weight: 700;">${info}</td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table>';
+            content.innerHTML = html;
+
+        } catch (e) {
+            content.innerHTML = '<div style="color: var(--danger); text-align:center; padding: 1rem;">Error al conectar con la API</div>';
+            console.error(e);
+        }
+    };
+
+    let lastMeetingsHtml = ""; // Para volver atrás de forma estable
+
+    window.verAsistentes = async function(safeId) {
+        const meetingId = atob(safeId); // Decodificamos el UUID
+        const content = document.getElementById('desglose-content');
+        const title = document.getElementById('desglose-title');
+        
+        if (!lastMeetingsHtml) lastMeetingsHtml = content.innerHTML;
+        
+        const oldTitle = title.textContent;
+        title.textContent = '👥 Lista de Participantes';
+        
+        // Loader moderno para asistentes
+        content.innerHTML = `
+            <div class="loader-container-modern animate-fade-in" style="padding: 2rem;">
+                <div class="loader-pulse" style="width: 40px; height: 40px;"></div>
+                <div class="loader-text-modern">
+                    <span class="main-msg" style="font-size: 1.1rem;">Buscando asistentes...</span>
+                </div>
+            </div>
+        `;
+
+        try {
+            const response = await fetch(`api/get_professor_meetings.php?meetingId=${encodeURIComponent(meetingId)}&type=participants_list`);
+            const data = await response.json();
+
+            if (data.error) {
+                content.innerHTML = `
+                    <div style="color: var(--danger); text-align:center; padding: 1rem;">${data.error}</div>
+                    <button onclick="volverAlHistorial()" style="width:100%; padding:0.5rem; background:#f1f5f9; border:none; border-radius:8px; cursor:pointer;">⬅ Volver</button>
+                `;
+                return;
+            }
+
+            const participants = data.participants || [];
+            if (participants.length === 0) {
+                content.innerHTML = `
+                    <div style="text-align:center; padding: 2rem; color: #64748b;">No se encontraron registros de asistentes en la API de Zoom para esta sesión.</div>
+                    <button onclick="volverAlHistorial()" style="width:100%; padding:0.5rem; background:#f1f5f9; border:none; border-radius:8px; cursor:pointer;">⬅ Volver</button>
+                `;
+                return;
+            }
+
+            let html = '<div style="display:flex; justify-content: space-between; align-items:center; margin-bottom:1rem;">';
+            html += `<span style="font-size:0.8rem; color:#64748b; font-weight:700;">${participants.length} personas encontradas</span>`;
+            html += '</div>';
+            
+            html += '<table style="width:100%; font-size: 0.8rem;">';
+            html += '<thead style="background: #f8fafc;"><tr><th style="padding:0.5rem; text-align:left;">NOMBRE</th><th style="padding:0.5rem; text-align:center;">DURACIÓN</th></tr></thead><tbody>';
+            
+            participants.forEach(p => {
+                html += `
+                    <tr>
+                        <td style="padding: 0.6rem 0.5rem; border-bottom: 1px solid #f1f5f9;">
+                            <div style="font-weight:700; color:var(--dark);">${p.name}</div>
+                            <div style="font-size:0.7rem; color:#94a3b8;">${p.email}</div>
+                        </td>
+                        <td style="padding: 0.6rem 0.5rem; border-bottom: 1px solid #f1f5f9; text-align:center; font-weight:600; color:var(--primary);">${p.duration}</td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table>';
+            html += `<button onclick="volverAlHistorial()" style="margin-top:1.5rem; width:100%; padding:0.8rem; background:#f1f5f9; color:#475569; border:none; border-radius:10px; cursor:pointer; font-weight:700; transition:0.2s;">⬅ Volver al historial de clases</button>`;
+            
+            content.innerHTML = html;
+
+        } catch (e) {
+            content.innerHTML = '<div style="color: var(--danger); text-align:center; padding: 1rem;">Error crítico al cargar asistentes</div>';
+        }
+    };
+
+    window.volverAlHistorial = function() {
+        if (lastMeetingsHtml) {
+            document.getElementById('desglose-content').innerHTML = lastMeetingsHtml;
+            document.getElementById('desglose-title').textContent = '👥 Historial de Clases y Participantes';
+            lastMeetingsHtml = ""; // Reset
+        }
+    };
+
+    window.cerrarModal = function() {
+        const modal = document.getElementById('modal');
+        modal.style.display = 'none';
+        modal.classList.remove('modal-consulta');
+    };
+
+    window.onclick = function(event) {
+        const modal = document.getElementById('modal');
+        if (event.target == modal) {
+            cerrarModal();
+        }
+    };
+
+    window.volverAlDashboard = function() {
+        document.getElementById('dashboard-stats').style.display = 'flex';
+        document.querySelector('.search-section').style.display = 'block';
+        document.getElementById('results-section').style.display = 'none';
+        searchInput.value = '';
+        
+        // Cerrar modal si está abierto
+        const modal = document.getElementById('modal');
+        modal.style.display = 'none';
+        modal.classList.remove('modal-consulta');
+    };
+
+    window.filterByDomain = async function(domain) {
+        syncOverlay.style.display = 'flex';
+        updateLoaderText(`Buscando docentes ${domain}...`);
+        
+        // Ocultar Dashboard y Buscador
+        document.getElementById('dashboard-stats').style.display = 'none';
+        document.querySelector('.search-section').style.display = 'none';
+        
+        container.innerHTML = `<tr><td colspan="6"><div class="skeleton-row"></div></td></tr>`;
+
+        try {
+            // Reutilizamos la lógica de búsqueda enviando el dominio
+            const response = await fetch(`api/search_professor.php?query=${encodeURIComponent(domain)}`);
+            const data = await response.json();
+
+            syncOverlay.style.display = 'none';
+
+            if (data.error) {
+                alert("Error: " + data.error);
+                volverAlDashboard();
+                return;
+            }
+
+            currentProfesores = data.profesores || [];
+            resultCount.textContent = `${currentProfesores.length} resultados para @${domain}`;
+            
+            // Mostrar sección de resultados con el mismo diseño colorido
+            document.getElementById('results-section').style.display = 'block';
+            
+            // Renderizar la tabla con los colores y estilos premium
+            container.innerHTML = '';
+            currentProfesores.forEach((p, index) => {
+                const pic = p.pic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(p.profesor) + '&background=random&color=fff';
+                const row = document.createElement('tr');
+                row.className = 'animate-fade-in';
+                row.innerHTML = `
+                    <td style="text-align: center;"><img src="${pic}" class="prof-pic" style="width: 45px; height: 45px; border-radius: 12px; border: 2px solid #f1f5f9;"></td>
+                    <td style="font-weight: 700; color: var(--primary-dark); font-size: 1rem;">${p.profesor}</td>
+                    <td style="color: var(--gray); font-size: 0.9rem;">${p.email}</td>
+                    <td style="text-align: center;"><span class="badge-status badge-active">ACTIVE</span></td>
+                    <td style="text-align: center; color: var(--gray); font-size: 0.85rem;">${p.timezone}</td>
+                    <td style="text-align: center;">
+                        <button onclick="verDetalles(${index})" class="btn-action">
+                            <i class="fas fa-gem"></i> Consultar Clases
+                        </button>
+                    </td>
+                `;
+                container.appendChild(row);
+            });
+
+        } catch (e) {
+            syncOverlay.style.display = 'none';
+            alert("Error al conectar con el servidor");
+            volverAlDashboard();
+        }
+    };
+
+});
