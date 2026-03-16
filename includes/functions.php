@@ -22,7 +22,14 @@ function getDB() {
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         return $pdo;
     } catch (PDOException $e) {
-        die('Error de conexión a la base de datos: ' . $e->getMessage());
+        // Log the error for the developer
+        error_log("Database Connection Error: " . $e->getMessage());
+        
+        // Return 500 and JSON error
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Error de conexión a la base de datos. Por favor verifica que el servidor MySQL esté activo.']);
+        exit;
     }
 }
 ?>

@@ -1,5 +1,5 @@
 <?php
-// login.php
+// login.php - Versión Split Screen Institucional
 require_once 'includes/auth.php';
 
 if (isLoggedIn()) {
@@ -17,127 +17,102 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') 
         $error = 'Usuario o contraseña incorrectos';
     }
 }
+
+$loginCssVersion = file_exists(__DIR__ . '/assets/css/login.css') ? filemtime(__DIR__ . '/assets/css/login.css') : time();
+$loginJsVersion = file_exists(__DIR__ . '/assets/js/login.js') ? filemtime(__DIR__ . '/assets/js/login.js') : time();
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TESA Zoom Monitor - Login</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .login-container {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 400px;
-            padding: 40px;
-        }
-        .login-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .login-header h1 {
-            color: #333;
-            font-size: 28px;
-            margin-bottom: 5px;
-        }
-        .login-header p {
-            color: #666;
-            font-size: 14px;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #555;
-            font-weight: 500;
-        }
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 16px;
-            transition: border 0.3s;
-        }
-        .form-group input:focus {
-            border-color: #667eea;
-            outline: none;
-        }
-        button {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        .error {
-            background: #fee;
-            color: #c33;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            text-align: center;
-            border: 1px solid #fcc;
-        }
-        .login-footer {
-            text-align: center;
-            margin-top: 20px;
-            color: #999;
-            font-size: 13px;
-        }
-    </style>
+    <title>Iniciar Sesión - TESA Zoom Monitor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/login.css?v=<?php echo $loginCssVersion; ?>">
 </head>
 <body>
-    <div class="login-container">
-        <div class="login-header">
-            <h1>TESA Zoom Monitor</h1>
-            <p>Instituto Superior Tecnológico San Antonio</p>
+    <div class="bg-mesh"></div>
+    <div class="particles" id="particle-container"></div>
+    <div class="login-wrapper">
+        <!-- Lado Izquierdo -->
+        <div class="login-info-side">
+            <h1>¡Bienvenido!</h1>
+            <h2>TESA Zoom Monitor</h2>
+            <p class="description">Sistema de gestión profesional para el control de auditoría y métricas de clases virtuales del Tecnológico San Antonio.</p>
+
+            <div class="feature-item">
+                <div class="feature-icon"><i class="fas fa-users-viewfinder"></i></div>
+                <div class="feature-text">
+                    <h4>Auditoría de Clases</h4>
+                    <p>Control total de reuniones programadas y recurrentes.</p>
+                </div>
+            </div>
+
+            <div class="feature-item">
+                <div class="feature-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="feature-text">
+                    <h4>Métricas de Asistencia</h4>
+                    <p>Seguimiento detallado de participantes en tiempo real.</p>
+                </div>
+            </div>
+
+            <div class="feature-item">
+                <div class="feature-icon"><i class="fas fa-file-video"></i></div>
+                <div class="feature-text">
+                    <h4>Historial de Sesiones</h4>
+                    <p>Acceso rápido a clases pasadas y reportes de conexión.</p>
+                </div>
+            </div>
         </div>
 
-        <?php if ($error): ?>
-            <div class="error"><?php echo e($error); ?></div>
-        <?php endif; ?>
+        <!-- Lado Derecho -->
+        <div class="login-form-side">
+            <div class="logo-container">
+                <div class="logo-placeholder">
+                    <span style="color:#7b2cbf">TECNOLÓGICO</span> <span style="color:#FFD700">SAN ANTONIO</span>
+                </div>
+            </div>
 
-        <form method="POST">
-            <div class="form-group">
-                <label for="correo">Correo institucional</label>
-                <input type="email" id="correo" name="correo" required placeholder="ejemplo@tesa.edu.ec">
+            <div class="form-header">
+                <h3>Iniciar Sesión</h3>
+                <p>Ingresa tus credenciales para acceder</p>
             </div>
-            <div class="form-group">
-                <label for="password">Contraseña</label>
-                <input type="password" id="password" name="password" required placeholder="••••••••">
+
+            <?php if ($error): ?>
+                <div class="error-msg">
+                    <i class="fas fa-circle-exclamation"></i> <?php echo e($error); ?>
+                </div>
+            <?php endif; ?>
+
+            <form method="POST">
+                <div class="input-group">
+                    <label>Email Institucional</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" name="correo" required placeholder="ejemplo@tesa.edu.ec" autofocus>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Contraseña</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" name="password" required placeholder="••••••••">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-submit">
+                    <i class="fas fa-right-to-bracket"></i> Ingresar al Sistema
+                </button>
+            </form>
+
+            <div class="login-footer-links">
+                <a href="#"><i class="fas fa-shield-halved"></i> ¿Problemas para acceder?</a>
+                <a href="#"><i class="fas fa-circle-info"></i> Ayuda</a>
             </div>
-            <button type="submit">Iniciar Sesión</button>
-        </form>
-        <div class="login-footer">
-            &copy; <?php echo date('Y'); ?> TESA - Todos los derechos reservados
         </div>
     </div>
+    <script src="assets/js/login.js?v=<?php echo $loginJsVersion; ?>"></script>
 </body>
 </html>

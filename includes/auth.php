@@ -1,6 +1,6 @@
 <?php
 // includes/auth.php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/functions.php';
 
 function login($correo, $password) {

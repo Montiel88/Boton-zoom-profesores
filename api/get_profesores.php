@@ -1,8 +1,8 @@
 <?php
-// api_get_profesores.php
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/zoom_api.php';
-require_once __DIR__ . '/config.php';
+// api/get_profesores.php
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/zoom_api.php';
+require_once __DIR__ . '/../config/config.php';
 requireLogin();
 
 header('Content-Type: application/json');

@@ -1,129 +1,147 @@
 <?php
-// index.php - Dashboard con filtros y estadísticas
-require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/config.php';
+// index.php
+require_once __DIR__ . '/includes/layout.php';
 requireLogin();
 
-// Obtener periodos y carreras desde la BD
-$db = getDB();
-$periodos = $db->query("SELECT * FROM periodos ORDER BY nombre DESC")->fetchAll(PDO::FETCH_ASSOC);
-$carreras = $db->query("SELECT * FROM carreras ORDER BY nombre")->fetchAll(PDO::FETCH_ASSOC);
+$mainVersion = file_exists(__DIR__ . '/assets/js/main.js') ? filemtime(__DIR__ . '/assets/js/main.js') : time();
+
+renderPageStart('TESA Zoom Monitor - Dashboard', 'dashboard');
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TESA Zoom Monitor - Dashboard</title>
-    <link rel="stylesheet" href="assets/css/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <header class="header">
-        <div class="logo-area">
-            <div class="logo-icon">📹</div>
-            <h1>TESA Zoom Monitor</h1>
+    <div class="brand-banner">
+        <div class="brand-inner">
+            <div class="brand-title">INSTITUTO TECNOLÓGICO SAN ANTONIO</div>
+            <div class="brand-subtitle">TESA</div>
+            <div class="brand-divider"></div>
         </div>
-        <div class="user-info">
-            <span class="user-name">👤 <?php echo e($_SESSION['nombre'] ?? $_SESSION['correo']); ?></span>
-            <?php if (($_SESSION['rol'] ?? '') === 'ADMIN'): ?>
-                <a href="usuarios.php" class="btn-test" style="background: #27ae60; text-decoration: none;">Usuarios</a>
-                <a href="logs.php" class="btn-test" style="background: #8e44ad; text-decoration: none;">Logs</a>
-            <?php endif; ?>
-            <a href="logout.php" class="btn-logout">Salir</a>
-        </div>
-    </header>
+    </div>
 
     <main class="container">
-        <!-- Dashboard Stats -->
-        <section class="stats-container">
-            <div class="stat-card">
-                <span class="stat-icon">👨‍🏫</span>
-                <span id="stat-profesores" class="stat-value">0</span>
-                <span class="stat-label">Profesores en Zoom</span>
+        <!-- Dashboard de Dominios -->
+        <div id="dashboard-stats" class="dashboard-stats">
+            <div class="stat-card-modern" onclick="filterByDomain('tesa.edu.ec')" style="cursor: pointer;">
+                <div class="stat-icon tesa-blue">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div class="stat-info">
+                    <div class="stat-label">Docentes TESA</div>
+                    <div id="stat-tesa" class="stat-number">0</div>
+                    <div class="stat-sub">@tesa.edu.ec</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <span class="stat-icon">💾</span>
-                <span id="stat-cache" class="stat-value">0</span>
-                <span class="stat-label">Elementos en Caché</span>
+            
+            <div class="stat-card-modern">
+                <div class="stat-icon zoom-green">
+                    <i class="fas fa-video"></i>
+                </div>
+                <div class="stat-info">
+                    <div class="stat-label">Clases en Vivo</div>
+                    <div id="stat-live" class="stat-number">0</div>
+                    <div class="stat-sub">Reuniones activas</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <span class="stat-icon">🔄</span>
-                <span id="stat-sync" class="stat-value">--:--</span>
-                <span class="stat-label">Última Sincronización</span>
-            </div>
-            <div class="stat-card">
-                <button onclick="forzarSincronizacion()" class="btn-test" style="padding: 8px 15px; font-size: 0.8rem; margin-top: 10px;">🔄 Sincronizar</button>
-                <span class="stat-label">Actualizar Datos</span>
-            </div>
-        </section>
 
-        <!-- Charts Section -->
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px;">
-            <div style="background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);">
-                <h3 style="margin-top: 0; color: #2c3e50;">📊 Actividad de Sincronización</h3>
-                <canvas id="syncChart" height="100"></canvas>
-            </div>
-            <div style="background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);">
-                <h3 style="margin-top: 0; color: #2c3e50;">📈 Estado Profesores</h3>
-                <canvas id="statusChart"></canvas>
+            <div class="stat-card-modern" onclick="filterByDomain('estud.itsa.edu.ec')" style="cursor: pointer;">
+                <div class="stat-icon itsa-pink">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="stat-info">
+                    <div class="stat-label">Docente ITSA</div>
+                    <div id="stat-itsa" class="stat-number">0</div>
+                    <div class="stat-sub">estud.itsa.edu.ec</div>
+                </div>
             </div>
         </div>
 
-        <!-- Filters Section -->
-        <div class="filters-section" style="background: white; border-radius: 15px; padding: 25px; margin-bottom: 30px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);">
-            <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 20px; align-items: end;">
-                <div class="form-group" style="display: flex; flex-direction: column;">
-                    <label style="font-weight: 600; margin-bottom: 8px;">📅 Período / Semestre</label>
-                    <select id="periodo" style="padding: 12px; border: 1px solid #ddd; border-radius: 8px;">
-                        <option value="">Seleccione...</option>
-                        <?php foreach ($periodos as $p): ?>
-                            <option value="<?php echo $p['id']; ?>"><?php echo e($p['nombre']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+        <div class="search-section">
+            <div class="search-card">
+                <div class="search-header">
+                    <h2 style="margin: 0; font-size: 1.4rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+                        🔍 Buscador de Profesores
+                    </h2>
+                    <p style="margin: 0.5rem 0 0; color: var(--gray); font-size: 0.9rem;">
+                        Ingresa el nombre o correo del profesor para ver sus reuniones de Zoom.
+                    </p>
                 </div>
-                <div class="form-group" style="display: flex; flex-direction: column;">
-                    <label style="font-weight: 600; margin-bottom: 8px;">🎓 Carrera</label>
-                    <select id="carrera" disabled style="padding: 12px; border: 1px solid #ddd; border-radius: 8px;">
-                        <option value="">Primero seleccione un período</option>
-                        <?php foreach ($carreras as $c): ?>
-                            <option value="<?php echo $c['id']; ?>"><?php echo e($c['nombre']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                <div class="search-input-group" style="display: flex; gap: 1rem; align-items: center; margin-top: 1.5rem;">
+                    <input type="text" id="profesor-search" class="search-input" placeholder="Ej: Anabel Paredes o aparedes@itsa.edu.ec" style="flex: 1; padding: 0.8rem 1.5rem;">
+                    <button id="btn-buscar" class="btn-buscar" style="white-space: nowrap; padding: 0.8rem 2rem;">
+                        🚀 Buscar Ahora
+                    </button>
                 </div>
-                <button id="btn-actualizar" class="btn-test" disabled style="padding: 12px 30px;">🔍 Buscar Profesores</button>
             </div>
         </div>
 
         <!-- Results Section -->
-        <div class="results-section">
-            <div class="results-header">
-                <h2>👨‍🏫 Listado de Profesores</h2>
-                <span class="stat-badge" style="font-size: 1rem; padding: 8px 20px; background: var(--secondary); color: white;">
-                    Encontrados: <span id="result-count">0</span>
-                </span>
-            </div>
-            <div id="profesores-container">
-                <div class="empty-state" style="text-align: center; padding: 60px; background: white; border-radius: 15px; color: #7f8c8d;">
-                    <div class="empty-state-icon" style="font-size: 48px; margin-bottom: 15px;">📋</div>
-                    <h3>Filtros de Búsqueda</h3>
-                    <p>Seleccione un período y una carrera para visualizar los datos de Zoom</p>
+        <section id="results-section" class="results-card" style="display: none; margin-top: 2rem;">
+            <div class="results-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 700; color: var(--primary-dark);">
+                        📊 Resultados
+                    </div>
+                    <div id="result-count" style="font-size: 0.85rem; color: #64748b; margin-top: 0.25rem;">0 resultados</div>
                 </div>
+                <button onclick="volverAlDashboard()" class="btn-action" style="background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;">
+                    <i class="fas fa-arrow-left"></i> Volver al Dashboard
+                </button>
             </div>
-        </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 80px; text-align: center;">AVATAR</th>
+                            <th>NOMBRE DEL PROFESOR</th>
+                            <th>CORREO ELECTRÓNICO</th>
+                            <th style="text-align: center;">ESTADO</th>
+                            <th style="text-align: center;">ZONA HORARIA</th>
+                            <th style="text-align: center;">ACCIÓN</th>
+                        </tr>
+                    </thead>
+                    <tbody id="profesores-container">
+                        <tr>
+                            <td colspan="6" style="text-align:center; padding: 5rem; color: #94a3b8;">
+                                Ingrese un nombre para buscar profesores
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </main>
 
-    <!-- Modal Detalle Profesor -->
+    <!-- Pantalla de Carga Profesional (Diferente a Jeremy) -->
+    <div id="premium-loader" class="premium-loader">
+        <div class="loader-icon"></div>
+        <div class="loader-status">Analizando Métricas de Zoom...</div>
+        <div class="loader-bar-container">
+            <div id="loader-fill" class="loader-bar-fill"></div>
+        </div>
+        <div class="loader-timer">Procesando: <span id="timer">0s</span></div>
+    </div>
+
+    <!-- Modal para ver reuniones -->
     <div id="modal" class="modal">
         <div class="modal-content">
-            <span class="modal-close" style="position: absolute; right: 20px; top: 15px; font-size: 28px; cursor: pointer; z-index: 10;" onclick="cerrarModal()">&times;</span>
-            <div id="modal-content">
-                <!-- Se carga vía AJAX -->
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Modal para ver participantes -->
+    <div id="modal-participantes" class="modal" style="z-index: 3000;">
+        <div class="modal-content" style="max-width: 1200px; height: 90vh; max-height: 90vh;">
+            <div class="modal-header-prof" style="padding: 2rem; background: var(--primary-dark); display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3 style="margin:0; font-size: 1.8rem; font-weight: 900;">👥 Lista de Asistencia</h3>
+                    <p id="meeting-topic-title" style="margin: 0.5rem 0 0; font-size: 1.1rem; opacity: 0.8; font-weight: 500;"></p>
+                </div>
+                <span class="modal-close" onclick="cerrarModalParticipantes()" style="position: static;">&times;</span>
+            </div>
+            <div class="modal-body-prof" style="padding: 2rem 4rem;">
+                <div id="participantes-content" class="table-responsive" style="max-height: none;"></div>
+                <div style="margin-top: 2rem; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 1.5rem;">
+                    <button class="btn-cerrar-modal" onclick="cerrarModalParticipantes()" style="padding: 0.8rem 3rem;">Regresar</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <script src="assets/js/main.js"></script>
-</body>
-</html>
+<?php renderPageEnd(["assets/js/main.js?v={$mainVersion}"]); ?>
