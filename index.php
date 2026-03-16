@@ -3,7 +3,7 @@
 require_once __DIR__ . '/includes/layout.php';
 requireLogin();
 
-$mainVersion = file_exists(__DIR__ . '/assets/js/main.js') ? filemtime(__DIR__ . '/assets/js/main.js') : time();
+$mainVersion = (file_exists(__DIR__ . '/assets/js/main.js') ? filemtime(__DIR__ . '/assets/js/main.js') : time()) . '_v2';
 
 renderPageStart('TESA Zoom Monitor - Dashboard', 'dashboard');
 ?>
@@ -12,65 +12,54 @@ renderPageStart('TESA Zoom Monitor - Dashboard', 'dashboard');
             <div class="brand-title">INSTITUTO TECNOLÓGICO SAN ANTONIO</div>
             <div class="brand-subtitle">TESA</div>
             <div class="brand-divider"></div>
+
+            <!-- Dashboard de Dominios -->
+            <div id="dashboard-stats" class="dashboard-stats" style="margin-top: 2.5rem;">
+                <div class="stat-card-modern" onclick="filterByDomain('tesa.edu.ec')" style="cursor: pointer;">
+                    <div class="stat-icon tesa-blue">
+                        <i class="fas fa-graduation-cap"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">Docentes TESA</div>
+                        <div id="stat-tesa" class="stat-number">0</div>
+                        <div class="stat-sub">@tesa.edu.ec</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card-modern">
+                    <div class="stat-icon zoom-green">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">Clases en Vivo</div>
+                        <div id="stat-live" class="stat-number">0</div>
+                        <div class="stat-sub">Reuniones activas</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="search-section" style="margin-top: 1.5rem; margin-bottom: 0;">
+                <div class="search-card">
+                    <div class="search-header">
+                        <h2 style="margin: 0; font-size: 1.4rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+                            🔍 Buscador de Profesores
+                        </h2>
+                        <p style="margin: 0.5rem 0 0; color: var(--gray); font-size: 0.9rem;">
+                            Ingresa el nombre o correo del profesor para ver sus reuniones de Zoom.
+                        </p>
+                    </div>
+                    <div class="search-input-group" style="display: flex; gap: 1rem; align-items: center; margin-top: 1.5rem;">
+                        <input type="text" id="profesor-search" class="search-input" placeholder="Ej: Anabel Paredes o aparedes@itsa.edu.ec" style="flex: 1; padding: 0.8rem 1.5rem;">
+                        <button id="btn-buscar" class="btn-buscar" style="white-space: nowrap; padding: 0.8rem 2rem;">
+                            🚀 Buscar Ahora
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <main class="container">
-        <!-- Dashboard de Dominios -->
-        <div id="dashboard-stats" class="dashboard-stats">
-            <div class="stat-card-modern" onclick="filterByDomain('tesa.edu.ec')" style="cursor: pointer;">
-                <div class="stat-icon tesa-blue">
-                    <i class="fas fa-graduation-cap"></i>
-                </div>
-                <div class="stat-info">
-                    <div class="stat-label">Docentes TESA</div>
-                    <div id="stat-tesa" class="stat-number">0</div>
-                    <div class="stat-sub">@tesa.edu.ec</div>
-                </div>
-            </div>
-            
-            <div class="stat-card-modern">
-                <div class="stat-icon zoom-green">
-                    <i class="fas fa-video"></i>
-                </div>
-                <div class="stat-info">
-                    <div class="stat-label">Clases en Vivo</div>
-                    <div id="stat-live" class="stat-number">0</div>
-                    <div class="stat-sub">Reuniones activas</div>
-                </div>
-            </div>
-
-            <div class="stat-card-modern" onclick="filterByDomain('estud.itsa.edu.ec')" style="cursor: pointer;">
-                <div class="stat-icon itsa-pink">
-                    <i class="fas fa-users"></i>
-                </div>
-                <div class="stat-info">
-                    <div class="stat-label">Docente ITSA</div>
-                    <div id="stat-itsa" class="stat-number">0</div>
-                    <div class="stat-sub">estud.itsa.edu.ec</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="search-section">
-            <div class="search-card">
-                <div class="search-header">
-                    <h2 style="margin: 0; font-size: 1.4rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
-                        🔍 Buscador de Profesores
-                    </h2>
-                    <p style="margin: 0.5rem 0 0; color: var(--gray); font-size: 0.9rem;">
-                        Ingresa el nombre o correo del profesor para ver sus reuniones de Zoom.
-                    </p>
-                </div>
-                <div class="search-input-group" style="display: flex; gap: 1rem; align-items: center; margin-top: 1.5rem;">
-                    <input type="text" id="profesor-search" class="search-input" placeholder="Ej: Anabel Paredes o aparedes@itsa.edu.ec" style="flex: 1; padding: 0.8rem 1.5rem;">
-                    <button id="btn-buscar" class="btn-buscar" style="white-space: nowrap; padding: 0.8rem 2rem;">
-                        🚀 Buscar Ahora
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <!-- Results Section -->
         <section id="results-section" class="results-card" style="display: none; margin-top: 2rem;">
             <div class="results-header" style="display: flex; justify-content: space-between; align-items: center;">
@@ -133,7 +122,7 @@ renderPageStart('TESA Zoom Monitor - Dashboard', 'dashboard');
                     <h3 style="margin:0; font-size: 1.8rem; font-weight: 900;">👥 Lista de Asistencia</h3>
                     <p id="meeting-topic-title" style="margin: 0.5rem 0 0; font-size: 1.1rem; opacity: 0.8; font-weight: 500;"></p>
                 </div>
-                <span class="modal-close" onclick="cerrarModalParticipantes()" style="position: static;">&times;</span>
+                <span class="modal-close" onclick="cerrarModalParticipantes()" style="position: static; color: var(--secondary); background: rgba(255, 255, 255, 0.15); border: 2px solid rgba(255, 215, 0, 0.3); box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);">&times;</span>
             </div>
             <div class="modal-body-prof" style="padding: 2rem 4rem;">
                 <div id="participantes-content" class="table-responsive" style="max-height: none;"></div>

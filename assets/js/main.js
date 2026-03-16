@@ -32,9 +32,9 @@ document.addEventListener('DOMContentLoaded', function() {
         progressBar.style.width = '0%';
         timerSpan.textContent = '0s';
         
-        // Ocultar Dashboard y Buscador para dar efecto de "nueva página"
-        document.getElementById('dashboard-stats').style.display = 'none';
-        document.querySelector('.search-section').style.display = 'none';
+        // Ya no ocultamos el buscador para que el usuario pueda seguir viendo lo que buscó
+        // document.getElementById('dashboard-stats').style.display = 'none';
+        // document.querySelector('.search-section').style.display = 'none';
         
         container.innerHTML = `<tr><td colspan="6"><div class="skeleton-row"></div></td></tr>`;
 
@@ -76,15 +76,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 if (data.domain_stats) {
-                    document.getElementById('stat-tesa').textContent = data.domain_stats.tesa || 0;
-                    document.getElementById('stat-itsa').textContent = data.domain_stats.itsa || 0;
+                    const statTesa = document.getElementById('stat-tesa');
+                    if (statTesa) statTesa.textContent = data.domain_stats.tesa || 0;
                 }
 
                 currentProfesores = data.profesores || [];
                 resultCount.textContent = `${currentProfesores.length} resultados`;
                 
                 // Mostrar sección de resultados
-                document.getElementById('results-section').style.display = 'block';
+                const resultsSection = document.getElementById('results-section');
+                resultsSection.style.display = 'block';
+                
+                // Hacer scroll suave hasta los resultados
+                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
                 if (currentProfesores.length === 0) {
                     container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 3rem; color: var(--gray);">No se encontraron profesores</td></tr>`;
@@ -133,11 +137,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             const data = await response.json();
             if (data.domain_stats) {
-                document.getElementById('stat-tesa').textContent = data.domain_stats.tesa || 0;
-                document.getElementById('stat-itsa').textContent = data.domain_stats.itsa || 0;
+                const statTesa = document.getElementById('stat-tesa');
+                if (statTesa) statTesa.textContent = data.domain_stats.tesa || 0;
             }
             if (data.live_count !== undefined) {
-                document.getElementById('stat-live').textContent = data.live_count || 0;
+                const statLive = document.getElementById('stat-live');
+                if (statLive) statLive.textContent = data.live_count || 0;
             }
         } catch (e) {
             console.error("Error cargando estadísticas iniciales:", e.message);
@@ -170,15 +175,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const pic = p.pic || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(p.profesor) + '&background=fff&color=6366f1&size=128';
 
         content.innerHTML = `
+            <div class="modal-bg-blobs">
+                <div class="blob-modal blob-1"></div>
+                <div class="blob-modal blob-2"></div>
+                <div class="blob-modal blob-3"></div>
+                <div class="blob-modal blob-4"></div>
+            </div>
+
             <div class="modal-header-prof animate-fade-in" style="display: flex; align-items: center; gap: 2.5rem; text-align: left; padding: 2.5rem 4rem; position: relative; flex-wrap: wrap; justify-content: center;">
                 <img src="${pic}" class="prof-pic-large" style="width: 110px; height: 110px; border-radius: 30px; border: 5px solid rgba(255,255,255,0.4); box-shadow: 0 15px 30px rgba(0,0,0,0.3); object-fit: cover;">
                 <div style="flex: 1; min-width: 200px;">
-                    <h2 style="margin:0; font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; text-shadow: 0 2px 10px rgba(0,0,0,0.2);">${p.profesor}</h2>
+                    <h2 style="margin:0; font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; text-shadow: 0 2px 10px rgba(0,0,0,0.2); color: var(--primary-dark);">${p.profesor}</h2>
                     <div style="margin-top: 0.5rem; display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; justify-content: center;">
-                        <span style="opacity: 0.9; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; font-weight: 500; word-break: break-all;">
+                        <span style="opacity: 0.9; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; font-weight: 500; word-break: break-all; color: var(--gray);">
                             <i class="fas fa-envelope"></i> ${p.email}
                         </span>
-                        <span style="background: rgba(255,255,255,0.2); padding: 0.3rem 1rem; border-radius: 100px; font-size: 0.85rem; font-weight: 700; border: 1px solid rgba(255,255,255,0.1); white-space: nowrap;">
+                        <span style="background: white; color: var(--primary-dark); padding: 0.3rem 1rem; border-radius: 100px; font-size: 0.85rem; font-weight: 700; border: 1px solid rgba(0,0,0,0.05); white-space: nowrap; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
                             <i class="fas fa-clock"></i> ${p.timezone}
                         </span>
                     </div>
@@ -186,46 +198,54 @@ document.addEventListener('DOMContentLoaded', function() {
                 <span class="modal-close" onclick="cerrarModal()">&times;</span>
             </div>
             
-            <div class="modal-body-prof animate-fade-in">
+            <div class="modal-body-prof animate-fade-in" style="max-width: 1400px; margin: 0 auto; padding: 2.5rem 2rem;">
                 <!-- Tarjetas de Métricas Interactivas -->
-                <div class="metrics-row">
-                    <div class="metric-card-btn" onclick="filtrarPorTipo('past')" id="metric-past" style="cursor:pointer; background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 1.5rem; text-align: center; transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-                        <div style="color: #64748b; font-weight: 800; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            ⏪ CLASES PASADAS
+                <div class="metrics-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem; justify-content: center;">
+                    <div class="metric-card-btn" onclick="filtrarPorTipo('past')" id="metric-past" style="cursor:pointer; border-radius: 25px; padding: 2.5rem 1.5rem; text-align: center; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 180px;">
+                        <div style="color: #64748b; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; letter-spacing: 0.05em;">
+                            <i class="fas fa-history" style="font-size: 1.1rem; color: var(--primary);"></i> CLASES PASADAS
                         </div>
-                        <div class="metric-value" id="count-past" style="font-size: 2.5rem; font-weight: 900; color: #1e293b; background: linear-gradient(135deg, #1e293b 0%, #64748b 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0</div>
+                        <div class="metric-value" id="count-past" style="font-size: 3.5rem; font-weight: 900; line-height: 1;">0</div>
                     </div>
-                    <div class="metric-card-btn" onclick="filtrarPorTipo('present')" id="metric-present" style="cursor:pointer; background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 1.5rem; text-align: center; transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-                        <div style="color: #10b981; font-weight: 800; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            🟢 CLASES EN VIVO
+                    <div class="metric-card-btn" onclick="filtrarPorTipo('present')" id="metric-present" style="cursor:pointer; border-radius: 25px; padding: 2.5rem 1.5rem; text-align: center; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 180px;">
+                        <div style="color: #059669; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; letter-spacing: 0.05em;">
+                            <i class="fas fa-broadcast-tower" style="font-size: 1.1rem;"></i> CLASES EN VIVO
                         </div>
-                        <div class="metric-value" id="count-present" style="font-size: 2.5rem; font-weight: 900; color: #1e293b; background: linear-gradient(135deg, #10b981 0%, #059669 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0</div>
+                        <div class="metric-value" id="count-present" style="font-size: 3.5rem; font-weight: 900; line-height: 1;">0</div>
                     </div>
-                    <div class="metric-card-btn" onclick="filtrarPorTipo('future')" id="metric-future" style="cursor:pointer; background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 1.5rem; text-align: center; transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-                        <div style="color: #6366f1; font-weight: 800; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            ⏩ CLASES FUTURAS
+                    <div class="metric-card-btn" onclick="filtrarPorTipo('future')" id="metric-future" style="cursor:pointer; border-radius: 25px; padding: 2.5rem 1.5rem; text-align: center; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 180px;">
+                        <div style="color: #4f46e5; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; letter-spacing: 0.05em;">
+                            <i class="fas fa-calendar-alt" style="font-size: 1.1rem;"></i> CLASES PROGRAMADAS
                         </div>
-                        <div class="metric-value" id="count-future" style="font-size: 2.5rem; font-weight: 900; color: #1e293b; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0</div>
+                        <div class="metric-value" id="count-future" style="font-size: 3.5rem; font-weight: 900; line-height: 1;">0</div>
                     </div>
                 </div>
 
-                <!-- Filtros Avanzados - GRID MEJORADO -->
-                <div class="modal-filters-grid">
-                    <div class="filter-group">
-                        <label>Desde</label>
-                        <input type="date" id="filter-from" class="search-input" style="padding: 0.6rem; font-size: 0.85rem;" value="${new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}">
+                <!-- Filtros Avanzados - TARJETAS REORGANIZADAS -->
+                <div class="modal-filters-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 3rem; justify-content: center;">
+                    <div class="filter-card" style="border-radius: 22px; padding: 1.8rem 1.5rem; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <label style="display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.75rem; font-weight: 800; color: #6366f1; text-transform: uppercase; margin-bottom: 1.2rem; letter-spacing: 0.08em; width: 100%;">
+                            <i class="far fa-calendar-check" style="font-size: 1.1rem;"></i> DESDE
+                        </label>
+                        <input type="date" id="filter-from" class="search-input" style="width: 100%; max-width: 220px; padding: 0.85rem; border-radius: 14px; border: 2.5px solid #f1f5f9; background: white; font-weight: 700; color: var(--dark); outline: none; transition: all 0.3s; text-align: center; font-family: 'Inter', sans-serif;">
                     </div>
-                    <div class="filter-group">
-                        <label>Hasta</label>
-                        <input type="date" id="filter-to" class="search-input" style="padding: 0.6rem; font-size: 0.85rem;" value="${new Date().toISOString().split('T')[0]}">
+                    <div class="filter-card" style="border-radius: 22px; padding: 1.8rem 1.5rem; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <label style="display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.75rem; font-weight: 800; color: #6366f1; text-transform: uppercase; margin-bottom: 1.2rem; letter-spacing: 0.08em; width: 100%;">
+                            <i class="far fa-calendar-times" style="font-size: 1.1rem;"></i> HASTA
+                        </label>
+                        <input type="date" id="filter-to" class="search-input" style="width: 100%; max-width: 220px; padding: 0.85rem; border-radius: 14px; border: 2.5px solid #f1f5f9; background: white; font-weight: 700; color: var(--dark); outline: none; transition: all 0.3s; text-align: center; font-family: 'Inter', sans-serif;">
                     </div>
-                    <div class="filter-group">
-                        <label>Módulo / Periodo</label>
-                        <input type="text" id="filter-module" class="search-input filter-enter-action" style="padding: 0.6rem; font-size: 0.85rem;" placeholder="Ej: 26.S1">
+                    <div class="filter-card" style="border-radius: 22px; padding: 1.8rem 1.5rem; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <label style="display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.75rem; font-weight: 800; color: #6366f1; text-transform: uppercase; margin-bottom: 1.2rem; letter-spacing: 0.08em; width: 100%;">
+                            <i class="fas fa-layer-group" style="font-size: 1.1rem;"></i> MÓDULO
+                        </label>
+                        <input type="text" id="filter-module" class="search-input filter-enter-action" style="width: 100%; max-width: 220px; padding: 0.85rem; border-radius: 14px; border: 2.5px solid #f1f5f9; background: white; font-weight: 700; color: var(--dark); outline: none; transition: all 0.3s; text-align: center;" placeholder="Ej: 26.S1">
                     </div>
-                    <div class="filter-group">
-                        <label>Nombre de Clase</label>
-                        <input type="text" id="filter-class" class="search-input filter-enter-action" style="padding: 0.6rem; font-size: 0.85rem;" placeholder="Buscar reunión...">
+                    <div class="filter-card" style="border-radius: 22px; padding: 1.8rem 1.5rem; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <label style="display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.75rem; font-weight: 800; color: #6366f1; text-transform: uppercase; margin-bottom: 1.2rem; letter-spacing: 0.08em; width: 100%;">
+                            <i class="fas fa-search" style="font-size: 1.1rem;"></i> BUSCAR
+                        </label>
+                        <input type="text" id="filter-class" class="search-input filter-enter-action" style="width: 100%; max-width: 220px; padding: 0.85rem; border-radius: 14px; border: 2.5px solid #f1f5f9; background: white; font-weight: 700; color: var(--dark); outline: none; transition: all 0.3s; text-align: center;" placeholder="Nombre de clase...">
                     </div>
                 </div>
 
@@ -412,8 +432,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <tr>
                     <th style="padding: 1.2rem 1rem; text-align: left; border-bottom: 2px solid #e2e8f0;">REUNIÓN</th>
                     <th style="padding: 1.2rem 1rem; text-align: center; border-bottom: 2px solid #e2e8f0;">INICIO</th>
-                    <th style="padding: 1.2rem 1rem; text-align: center; border-bottom: 2px solid #e2e8f0;">DURACIÓN</th>
                     <th style="padding: 1.2rem 1rem; text-align: center; border-bottom: 2px solid #e2e8f0;">FIN</th>
+                    <th style="padding: 1.2rem 1rem; text-align: center; border-bottom: 2px solid #e2e8f0;">DURACIÓN</th>
                     <th style="padding: 1.2rem 1rem; text-align: center; border-bottom: 2px solid #e2e8f0;">${type === 'past' ? 'ASISTENCIA' : 'ESTADO'}</th>
                     <th style="padding: 1.2rem 1rem; text-align: center; border-bottom: 2px solid #e2e8f0;">GRABÓ</th>
                 </tr>
@@ -449,11 +469,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td style="padding: 1rem; border-bottom: 1px solid #f1f5f9; text-align: center; font-size: 0.85rem;">
                         ${m.inicio ? new Date(m.inicio).toLocaleString('es-EC', { hour12: false }) : 'Recurrente'}
                     </td>
+                    <td style="padding: 1rem; border-bottom: 1px solid #f1f5f9; text-align: center; font-size: 0.85rem;">
+                        ${m.fin ? new Date(m.fin).toLocaleString('es-EC', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A'}
+                    </td>
                     <td style="padding: 1rem; border-bottom: 1px solid #f1f5f9; text-align: center; font-family: monospace; font-weight: 600;">
                         ${m.duracion}
-                    </td>
-                    <td style="padding: 1rem; border-bottom: 1px solid #f1f5f9; text-align: center; font-size: 0.85rem;">
-                        ${m.fin ? new Date(m.fin).toLocaleTimeString('es-EC', { hour12: false }) : 'N/A'}
                     </td>
                     <td style="padding: 1rem; border-bottom: 1px solid #f1f5f9; text-align: center;">
                         ${accionBtn}
@@ -720,10 +740,13 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     window.volverAlDashboard = function() {
-        document.getElementById('dashboard-stats').style.display = 'flex';
-        document.querySelector('.search-section').style.display = 'block';
+        // El dashboard y el buscador ahora están siempre visibles dentro del banner
+        // Solo ocultamos la sección de resultados
         document.getElementById('results-section').style.display = 'none';
         searchInput.value = '';
+        
+        // Hacer scroll hacia arriba al banner
+        document.querySelector('.brand-banner').scrollIntoView({ behavior: 'smooth', block: 'start' });
         
         // Cerrar modal si está abierto
         const modal = document.getElementById('modal');
@@ -735,9 +758,9 @@ document.addEventListener('DOMContentLoaded', function() {
         syncOverlay.style.display = 'flex';
         updateLoaderText(`Buscando docentes ${domain}...`);
         
-        // Ocultar Dashboard y Buscador
-        document.getElementById('dashboard-stats').style.display = 'none';
-        document.querySelector('.search-section').style.display = 'none';
+        // Ya no ocultamos el dashboard ni el buscador
+        // document.getElementById('dashboard-stats').style.display = 'none';
+        // document.querySelector('.search-section').style.display = 'none';
         
         container.innerHTML = `<tr><td colspan="6"><div class="skeleton-row"></div></td></tr>`;
 
@@ -750,15 +773,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (data.error) {
                 alert("Error: " + data.error);
-                volverAlDashboard();
+                // volverAlDashboard();
                 return;
             }
 
             currentProfesores = data.profesores || [];
             resultCount.textContent = `${currentProfesores.length} resultados para @${domain}`;
             
-            // Mostrar sección de resultados con el mismo diseño colorido
-            document.getElementById('results-section').style.display = 'block';
+            // Mostrar sección de resultados
+            const resultsSection = document.getElementById('results-section');
+            resultsSection.style.display = 'block';
+            
+            // Hacer scroll suave hasta los resultados
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             
             // Renderizar la tabla con los colores y estilos premium
             container.innerHTML = '';

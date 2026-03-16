@@ -14,9 +14,9 @@ require_once __DIR__ . '/auth.php';
  */
 function renderPageStart(string $title, string $activeNav = 'dashboard'): void
 {
-    $cssVersion = file_exists(__DIR__ . '/../assets/css/style.css')
+    $cssVersion = (file_exists(__DIR__ . '/../assets/css/style.css')
         ? filemtime(__DIR__ . '/../assets/css/style.css')
-        : time();
+        : time()) . '_v2';
 
     $dashboardClass = ($activeNav === 'dashboard') ? 'active' : '';
     $usersClass     = ($activeNav === 'usuarios') ? 'active' : '';

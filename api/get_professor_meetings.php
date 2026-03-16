@@ -9,8 +9,8 @@ header('Content-Type: application/json');
 $userId = $_GET['userId'] ?? '';
 $meetingId = $_GET['meetingId'] ?? '';
 $type = $_GET['type'] ?? '';
-$from = $_GET['from'] ?? date('Y-m-d', strtotime('-180 days'));
-$to = $_GET['to'] ?? date('Y-m-d');
+$from = !empty($_GET['from']) ? $_GET['from'] : date('Y-m-d', strtotime('-180 days'));
+$to = !empty($_GET['to']) ? $_GET['to'] : date('Y-m-d');
 
 // Caso especial para lista de participantes (solo requiere meetingId)
 if ($type === 'participants_list' && !empty($meetingId)) {
@@ -48,13 +48,34 @@ try {
     $now = time();
 
     // 1. Obtener reuniones pasadas con detalles de participantes (Report API)
-    $pastMeetings = getPastMeetings($userId, $from, $to);
+    // Restauramos el rango a 180 días para asegurar que no se pierdan reuniones antiguas
+    $searchFrom = !empty($_GET['from']) ? $_GET['from'] : date('Y-m-d', strtotime('-180 days'));
+    $searchTo = !empty($_GET['to']) ? $_GET['to'] : date('Y-m-d');
+    
+    // Implementar caché robusta para evitar la lentitud de la API de Zoom
+    $cache = new CacheManager();
+    $cacheKeyPast = "past_meetings_{$userId}_{$searchFrom}_{$searchTo}";
+    $pastMeetings = $cache->get($cacheKeyPast);
+    
+    if (!$pastMeetings) {
+        $pastMeetings = getPastMeetings($userId, $searchFrom, $searchTo);
+        if ($pastMeetings && !isset($pastMeetings['error'])) {
+            $cache->set($cacheKeyPast, $pastMeetings, 300); // 5 minutos de caché
+        }
+    }
     
     // 2. Obtener reuniones programadas y recurrentes (Meeting API)
     $rawMeetings = getZoomMeetings($userId);
     
-    // 3. Obtener grabaciones (con el mismo rango de fechas para evitar falsos negativos)
-    $recordingsData = getZoomRecordings($userId, $from, $to);
+    // 3. Obtener grabaciones - Usar caché también aquí para agilizar
+    $cacheKeyRec = "recordings_{$userId}_{$searchFrom}_{$searchTo}";
+    $recordingsData = $cache->get($cacheKeyRec);
+    if (!$recordingsData) {
+        $recordingsData = getZoomRecordings($userId, $searchFrom, $searchTo);
+        if ($recordingsData && !isset($recordingsData['error'])) {
+            $cache->set($cacheKeyRec, $recordingsData, 600); // 10 minutos de caché
+        }
+    }
 
     // 4. Obtener reuniones EN VIVO (Metrics API)
     $liveData = getLiveMeetings();
@@ -94,9 +115,15 @@ try {
     // Cache local en memoria para evitar múltiples llamadas al mismo meeting
     $participantsCache = [];
 
-    // Procesar reuniones pasadas (Auditoría)
+    // Mapear reuniones pasadas por UUID para búsqueda rápida
+    $pastUuidsMap = [];
+
+    // Procesar reuniones pasadas (Auditoría - Fuente de Verdad para Sesiones Cerradas)
     if (isset($pastMeetings['meetings']) && is_array($pastMeetings['meetings'])) {
         foreach ($pastMeetings['meetings'] as $m) {
+            $uuid = $m['uuid'] ?? '';
+            $mId = (string)($m['id'] ?? '');
+            
             $startTimeStr = $m['start_time'] ?? '';
             $endTimeStr = $m['end_time'] ?? '';
             
@@ -107,7 +134,6 @@ try {
             if ($startTS && $endTS) {
                 $durationSeconds = $endTS - $startTS;
             } else {
-                // Fallback a la duración en minutos si no hay end_time exacto
                 $durationSeconds = ($m['duration'] ?? 0) * 60;
             }
 
@@ -118,112 +144,142 @@ try {
 
             $endTime = $endTimeStr ? date('Y-m-d H:i:s', $endTS) : '';
 
-            // Obtener participantes: si el conteo viene en cero, intentamos un fetch puntual del reporte de participantes
             $participantsCount = $m['participants_count'] ?? 0;
-            $uuid = $m['uuid'] ?? '';
             
-            // Si el conteo es 0 o no existe, intentamos obtenerlo por UUID desde múltiples fuentes
+            // REACTIVADO: Recuperación agresiva de participantes
+            // Para asegurar que NINGUNA clase antigua aparezca sin datos.
             if ($participantsCount <= 0 && $uuid) {
                 if (!isset($participantsCache[$uuid])) {
-                    // Intento 1: Past Meeting Instance Details (Muy confiable para el count)
-                    $token = getZoomToken();
-                    if (!is_array($token)) {
-                        $needsDouble = (strpos($uuid, '/') !== false || strpos($uuid, '+') !== false);
-                        $encoded = $needsDouble ? urlencode(urlencode($uuid)) : urlencode($uuid);
-                        
-                        $pUrl = "https://api.zoom.us/v2/past_meetings/$encoded";
-                        $pRes = zoomGet($pUrl, $token);
-                        if ($pRes['http_code'] === 200) {
-                            $pData = json_decode($pRes['response'], true);
-                            if (isset($pData['participants_count']) && $pData['participants_count'] > 0) {
-                                $participantsCache[$uuid] = $pData['participants_count'];
-                            }
-                        }
-                    }
-
-                    // Intento 2: Report API (Si el anterior falló o no dio count > 0)
-                    if (!isset($participantsCache[$uuid])) {
-                        $pData = getMeetingParticipants($uuid);
-                        if (!isset($pData['error']) && isset($pData['participants']) && is_array($pData['participants'])) {
-                            $participantsCache[$uuid] = count($pData['participants']);
-                        } else {
-                            $participantsCache[$uuid] = 0;
-                        }
-                    }
+                    $pData = getMeetingParticipants($uuid);
+                    $participantsCache[$uuid] = (isset($pData['participants']) && is_array($pData['participants'])) ? count($pData['participants']) : 0;
                 }
                 $participantsCount = $participantsCache[$uuid];
             }
 
-            $allPastMeetings[] = [
+            $recordingMatch = false;
+            $uuidStr = (string)$uuid;
+            $mIdStr = (string)$mId;
+            
+            if ($uuidStr !== '' && (
+                isset($recordingUuids[$uuidStr]) || 
+                isset($recordingUuids[urlencode($uuidStr)]) || 
+                isset($recordingUuids[urlencode(urlencode($uuidStr))])
+            )) {
+                $recordingMatch = true;
+            } elseif ($mIdStr !== '' && isset($recordingIdsFallback[$mIdStr])) {
+                $recordingMatch = true;
+            }
+
+            $meetingEntry = [
                 'reunion' => ($m['topic'] ?? 'Sin Tema'),
-                'reunion_id' => $m['id'] ?? 'N/A',
+                'reunion_id' => $mIdStr,
                 'inicio' => $startTimeStr,
                 'duracion' => $durationFormatted,
                 'fin' => $endTime,
                 'participantes' => $participantsCount,
-                'grabado' => isset($recordingUuids[(string)($uuid ?? '')])
-                             || isset($recordingUuids[urlencode((string)($uuid ?? ''))])
-                             || isset($recordingUuids[urlencode(urlencode((string)($uuid ?? '')))])
-                             || (empty($m['uuid']) && isset($recordingIdsFallback[(string)($m['id'] ?? '')])),
-                'uuid' => $uuid,
-                'type' => 1 // Pasada
+                'grabado' => $recordingMatch,
+                'uuid' => $uuidStr,
+                'type' => 1
             ];
-            $totalParticipantsCount += $participantsCount;
+
+            $allPastMeetings[] = $meetingEntry;
+            if ($uuid) $pastUuidsMap[$uuid] = true;
         }
     }
 
-    // Procesar reuniones de la Meeting API (Futuras o posiblemente en vivo)
+    // Procesar reuniones de la Meeting API (Para detectar futuras y gaps en reportes)
     if (isset($rawMeetings['meetings']) && is_array($rawMeetings['meetings'])) {
         foreach ($rawMeetings['meetings'] as $m) {
-            $startTimeStr = $m['start_time'] ?? '';
-            $durationMin = $m['duration'] ?? 0;
-            $startTS = $startTimeStr ? strtotime($startTimeStr) : 0;
-            $endTS = $startTS + ($durationMin * 60);
-            $endTimeStr = $startTimeStr ? date('Y-m-d H:i:s', $endTS) : '';
-
-            $uuidCurrent = $m['uuid'] ?? '';
             $mIdStr = (string)($m['id'] ?? '');
+            $uuidCurrent = $m['uuid'] ?? '';
+            $startTimeStr = $m['start_time'] ?? '';
+            $startTS = $startTimeStr ? strtotime($startTimeStr) : 0;
             
             // Determinar si está en vivo AHORA
             $isLive = isset($liveMeetingsMap[$mIdStr]);
-            $liveParticipants = $isLive ? ($liveMeetingsMap[$mIdStr]['participants'] ?? 0) : 0;
             
-            // Si está en vivo, intentar usar la duración exacta de la Metrics API
-            $durationFormatted = sprintf('%02d:%02d:00', floor($durationMin / 60), $durationMin % 60);
-            if ($isLive && isset($liveMeetingsMap[$mIdStr]['duration'])) {
-                $durationFormatted = $liveMeetingsMap[$mIdStr]['duration'];
-                // Asegurar formato HH:mm:ss si solo viene mm:ss
+            if ($isLive) {
+                $liveParticipants = ($liveMeetingsMap[$mIdStr]['participants'] ?? 0);
+                $durationFormatted = $liveMeetingsMap[$mIdStr]['duration'] ?? '00:00:00';
                 if (strlen($durationFormatted) === 5) $durationFormatted = "00:" . $durationFormatted;
+
+                $allLiveMeetings[] = [
+                    'reunion' => ($m['topic'] ?? 'Sin Tema'),
+                    'reunion_id' => $mIdStr,
+                    'inicio' => $startTimeStr,
+                    'duracion' => $durationFormatted,
+                    'fin' => '',
+                    'participantes' => $liveParticipants,
+                    'is_live' => true,
+                    'grabado' => isset($recordingUuids[(string)$uuidCurrent]) || isset($recordingIdsFallback[$mIdStr]),
+                    'uuid' => $uuidCurrent,
+                    'type' => $m['type'] ?? 2
+                ];
+                continue;
             }
 
-            $meetingData = [
-                'reunion' => ($m['topic'] ?? 'Sin Tema'),
-                'reunion_id' => $m['id'] ?? 'N/A',
-                'inicio' => $startTimeStr,
-                'duracion' => $durationFormatted,
-                'fin' => $endTimeStr,
-                'participantes' => $liveParticipants,
-                'is_live' => $isLive,
-                'grabado' => isset($recordingUuids[(string)($uuidCurrent ?? '')])
-                             || isset($recordingUuids[urlencode((string)($uuidCurrent ?? ''))])
-                             || isset($recordingUuids[urlencode(urlencode((string)($uuidCurrent ?? '')))])
-                             || (empty($m['uuid']) && isset($recordingIdsFallback[(string)($m['id'] ?? '')])),
-                'join_url' => $m['join_url'] ?? '',
-                'type' => $m['type'] ?? 2,
-                'uuid' => $uuidCurrent
-            ];
-
-            if ($isLive) {
-                $allLiveMeetings[] = $meetingData;
-            } elseif ($startTS > $now) {
-                // Es del FUTURO (Mañana, hoy más tarde, etc.)
-                $allFutureMeetings[] = $meetingData;
+            if ($startTS > $now) {
+                // FUTURA
+                $allFutureMeetings[] = [
+                    'reunion' => ($m['topic'] ?? 'Sin Tema'),
+                    'reunion_id' => $mIdStr,
+                    'inicio' => $startTimeStr,
+                    'duracion' => sprintf('%02d:%02d:00', floor(($m['duration']??0)/60), ($m['duration']??0)%60),
+                    'fin' => date('Y-m-d H:i:s', $startTS + (($m['duration']??0)*60)),
+                    'participantes' => 0,
+                    'grabado' => false,
+                    'uuid' => $uuidCurrent,
+                    'type' => $m['type'] ?? 2
+                ];
             } else {
-                // Es antigua o de hoy que ya pasó pero no está en Report API aún
-                // La agregamos a pasadas si no existe por ID
-                $found = false;
-                foreach($allPastMeetings as $pm) { if($pm['reunion_id'] == $m['id']) $found = true; }
-                if(!$found) $allPastMeetings[] = $meetingData;
+                // PASADA - Solo agregar si NO está ya en el reporte (evitar duplicados rotos)
+                $alreadyReported = false;
+                if ($uuidCurrent && isset($pastUuidsMap[$uuidCurrent])) $alreadyReported = true;
+                
+                if (!$alreadyReported) {
+                    // Verificar si existe alguna instancia en allPastMeetings con este ID
+                    foreach ($allPastMeetings as $pm) {
+                        if ($pm['reunion_id'] === $mIdStr) {
+                            $alreadyReported = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!$alreadyReported) {
+                    // Es un gap: reunión que pasó pero no salió en Report API
+                    $durationMin = $m['duration'] ?? 0;
+                    $endTS = $startTS + ($durationMin * 60);
+                    
+                    $participantsCount = 0;
+                    if ($uuidCurrent) {
+                        $pData = getMeetingParticipants($uuidCurrent);
+                        $participantsCount = (isset($pData['participants']) && is_array($pData['participants'])) ? count($pData['participants']) : 0;
+                    }
+
+                    $recordingMatch = false;
+                    if ($uuidCurrent && (
+                        isset($recordingUuids[(string)$uuidCurrent]) || 
+                        isset($recordingUuids[urlencode((string)$uuidCurrent)]) || 
+                        isset($recordingUuids[urlencode(urlencode((string)$uuidCurrent))])
+                    )) {
+                        $recordingMatch = true;
+                    } elseif (isset($recordingIdsFallback[$mIdStr])) {
+                        $recordingMatch = true;
+                    }
+
+                    $allPastMeetings[] = [
+                        'reunion' => ($m['topic'] ?? 'Sin Tema'),
+                        'reunion_id' => $mIdStr,
+                        'inicio' => $startTimeStr,
+                        'duracion' => sprintf('%02d:%02d:00', floor($durationMin/60), $durationMin%60),
+                        'fin' => date('Y-m-d H:i:s', $endTS),
+                        'participantes' => $participantsCount,
+                        'grabado' => $recordingMatch,
+                        'uuid' => $uuidCurrent,
+                        'type' => 1
+                    ];
+                }
             }
         }
     }

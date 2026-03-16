@@ -1,0 +1,28 @@
+# Archivos de sistema
+Thumbs.db
+.DS_Store
+
+# Archivos de configuración local
+.env
+config/local.php
+
+# Directorio de sesiones
+storage/sessions/
+!storage/sessions/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# Directorio de caché
+temp/
+cache/
+
+# Archivos de IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Archivos de backup
+*.bak
+*.backup
