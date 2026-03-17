@@ -1,0 +1,154 @@
+// assets/js/main.js - VERSIÓN FUNCIONAL
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('profesor-search');
+    const btnBuscar = document.getElementById('btn-buscar');
+    const container = document.getElementById('profesores-container');
+    const resultCount = document.getElementById('result-count');
+    const syncOverlay = document.getElementById('premium-loader');
+    const progressBar = document.getElementById('loader-fill');
+    const timerSpan = document.getElementById('timer');
+
+    let syncInterval;
+    let seconds = 0;
+    let currentProfesores = [];
+
+    const API_URL = 'http://localhost/zoom-monitor/api';
+
+    const updateLoaderText = (text) => {
+        const statusElement = document.querySelector('.loader-status');
+        if (statusElement) statusElement.textContent = text;
+    };
+
+    const performSearch = async () => {
+        const query = searchInput.value.trim();
+        if (!query) {
+            alert("Por favor ingresa un nombre o correo.");
+            return;
+        }
+
+        syncOverlay.style.display = 'flex';
+        updateLoaderText("Buscando profesores...");
+        seconds = 0;
+        progressBar.style.width = '0%';
+        timerSpan.textContent = '0s';
+
+        document.getElementById('dashboard-stats').style.display = 'none';
+        document.querySelector('.search-section').style.display = 'none';
+        container.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 3rem;">Buscando...</td></tr>';
+
+        syncInterval = setInterval(() => {
+            seconds++;
+            timerSpan.textContent = `${seconds}s`;
+            if (seconds < 5) progressBar.style.width = `${seconds * 20}%`;
+        }, 1000);
+
+        try {
+            const url = `${API_URL}/search_professor.php?query=${encodeURIComponent(query)}`;
+            console.log("Consultando:", url);
+
+            const response = await fetch(url, {
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log("Datos:", data);
+
+            clearInterval(syncInterval);
+            progressBar.style.width = '100%';
+
+            setTimeout(() => {
+                syncOverlay.style.display = 'none';
+
+                if (data.error) {
+                    alert("Error: " + data.error);
+                    return;
+                }
+
+                if (data.domain_stats) {
+                    document.getElementById('stat-tesa').textContent = data.domain_stats.tesa || 0;
+                    document.getElementById('stat-itsa').textContent = data.domain_stats.itsa || 0;
+                }
+
+                currentProfesores = data.profesores || [];
+                resultCount.textContent = `${currentProfesores.length} resultados`;
+                document.getElementById('results-section').style.display = 'block';
+
+                if (currentProfesores.length === 0) {
+                    container.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 3rem;">No se encontraron profesores</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                currentProfesores.forEach((p, index) => {
+                    const pic = p.pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.profesor)}&background=4f46e5&color=fff`;
+                    html += `
+                        <tr class="animate-fade-in">
+                            <td style="text-align: center; padding: 1rem;">
+                                <img src="${pic}" style="width: 45px; height: 45px; border-radius: 12px; object-fit: cover;">
+                            </td>
+                            <td style="font-weight: 700;">${p.profesor}</td>
+                            <td>${p.email}</td>
+                            <td style="text-align: center;">
+                                <span class="badge-status ${p.status === 'active' ? 'badge-active' : 'badge-inactive'}">${p.status.toUpperCase()}</span>
+                            </td>
+                            <td style="text-align: center;">${p.timezone}</td>
+                            <td style="text-align: center;">
+                                <button onclick="verDetalles(${index})" class="btn-action">💎 Consultar Clases</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                container.innerHTML = html;
+
+            }, 500);
+
+        } catch (e) {
+            clearInterval(syncInterval);
+            syncOverlay.style.display = 'none';
+            alert(`Error: ${e.message}`);
+            console.error(e);
+        }
+    };
+
+    const loadDashboardStats = async () => {
+        try {
+            const response = await fetch(`${API_URL}/search_professor.php?query=*`, {
+                credentials: 'include'
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            if (data.domain_stats) {
+                document.getElementById('stat-tesa').textContent = data.domain_stats.tesa || 0;
+                document.getElementById('stat-itsa').textContent = data.domain_stats.itsa || 0;
+            }
+            document.getElementById('stat-live').textContent = data.live_count || 0;
+        } catch (e) {
+            console.error("Error stats:", e);
+        }
+    };
+
+    loadDashboardStats();
+    setInterval(loadDashboardStats, 120000);
+
+    btnBuscar.addEventListener('click', performSearch);
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
+
+    window.verDetalles = function(index) {
+        const p = currentProfesores[index];
+        alert(`Ver detalles de ${p.profesor} (implementación pendiente)`);
+    };
+
+    window.volverAlDashboard = function() {
+        document.getElementById('dashboard-stats').style.display = 'flex';
+        document.querySelector('.search-section').style.display = 'block';
+        document.getElementById('results-section').style.display = 'none';
+        searchInput.value = '';
+    };
+
+});

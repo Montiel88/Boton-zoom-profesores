@@ -414,6 +414,59 @@ tbody tr:hover { background: #fdfdfd; transform: scale(1.005); box-shadow: inset
     transform: translateY(-1px);
 }
 
+/* MODAL FILTERS GRID */
+.modal-filters-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 1rem !important; /* Reducido para evitar solapamiento */
+    margin-bottom: 2rem !important;
+    background: #ffffff !important; /* Fondo blanco para resaltar sobre el modal */
+    padding: 1.2rem !important; /* Reducido */
+    border-radius: 20px !important;
+    border: 1px solid #e2e8f0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    align-items: flex-end !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03) !important;
+}
+
+.modal-filters-grid > div {
+    min-width: 0;
+    width: 100%;
+}
+
+.modal-filters-grid label {
+    display: block;
+    font-size: 0.65rem; /* Más pequeño */
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+    text-align: center;
+    white-space: nowrap;
+    letter-spacing: 0.05em;
+}
+
+.modal-filters-grid .search-input {
+    width: 100% !important;
+    height: 42px !important; /* Más pequeño */
+    padding: 0.5rem !important; /* Más compacto */
+    border-radius: 12px !important;
+    border: 1.5px solid #e2e8f0 !important;
+    text-align: center !important;
+    font-size: 0.85rem !important; /* Más pequeño */
+    background: #f8fafc !important; /* Fondo gris claro */
+    transition: all 0.3s ease !important;
+    box-sizing: border-box !important;
+}
+
+.modal-filters-grid .search-input:focus {
+    border-color: var(--primary) !important;
+    background: white !important;
+    box-shadow: 0 0 0 4px rgba(123, 44, 191, 0.08) !important;
+    outline: none !important;
+}
+
 /* MODALS */
 .modal {
     display: none;
@@ -1390,5 +1443,36 @@ html, body {
     #modal-participantes table th,
     #modal-participantes table td {
         padding: 0.5rem 0.3rem;
+    }
+}
+
+/* Correcciones de desbordamiento */
+body, html {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+.modal-content, .modal-body-prof {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.table-responsive {
+    overflow-x: auto;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+}
+
+.metrics-row, .modal-filters-grid {
+    flex-wrap: wrap;
+    max-width: 100%;
+}
+
+@media (max-width: 768px) {
+    .modal-filters-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .metrics-row {
+        grid-template-columns: 1fr !important;
     }
 }

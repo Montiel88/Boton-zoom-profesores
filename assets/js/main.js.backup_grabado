@@ -215,28 +215,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="metric-value" id="count-present" style="font-size: 2.5rem; font-weight: 900;">0</div>
                     </div>
                     <div class="metric-card-btn" onclick="filtrarPorTipo('future')" id="metric-future" style="cursor:pointer; background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 1.5rem; text-align: center;">
-                        <div style="color: #6366f1; font-weight: 800; font-size: 0.8rem; text-transform: uppercase;">⏩ CLASES PROGRAMADAS</div>
+                        <div style="color: #6366f1; font-weight: 800; font-size: 0.8rem; text-transform: uppercase;">⏩ CLASES FUTURAS</div>
                         <div class="metric-value" id="count-future" style="font-size: 2.5rem; font-weight: 900;">0</div>
                     </div>
                 </div>
 
                 <!-- Filtros -->
-                <div class="modal-filters-grid">
+                <div class="modal-filters-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 2rem;">
                     <div>
                         <label>Desde</label>
-                        <input type="date" id="filter-from" class="search-input" value="">
+                        <input type="date" id="filter-from" class="search-input" style="padding: 0.6rem; width: 100%;" value="${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}">
                     </div>
                     <div>
                         <label>Hasta</label>
-                        <input type="date" id="filter-to" class="search-input" value="${new Date().toISOString().split('T')[0]}">
-                    </div>
-                    <div>
-                        <label>Módulo / Periodo</label>
-                        <input type="text" id="filter-module" class="search-input" placeholder="Ej: 26.S1">
-                    </div>
-                    <div>
-                        <label>Nombre de Clase</label>
-                        <input type="text" id="filter-class" class="search-input" placeholder="Buscar reunión...">
+                        <input type="date" id="filter-to" class="search-input" style="padding: 0.6rem; width: 100%;" value="${new Date().toISOString().split('T')[0]}">
                     </div>
                 </div>
 
@@ -251,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div id="desglose-container">
                     <div id="desglose-content" class="table-responsive">
                         <div style="text-align:center; padding: 3rem; color: #64748b;">
-                            Consultando historial automáticamente...
+                            Haz clic en CONSULTAR CLASES para ver el historial
                         </div>
                     </div>
                 </div>
@@ -261,44 +253,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
         `;
-
-        // Cargar datos automáticamente al abrir
-        setTimeout(() => {
-            cargarClasesDetalle(profesor.id);
-            
-            // Agregar listeners para filtrado en tiempo real en los campos de texto
-            const modInput = document.getElementById('filter-module');
-            const classInput = document.getElementById('filter-class');
-            const fromInput = document.getElementById('filter-from');
-            const toInput = document.getElementById('filter-to');
-            
-            if(fromInput) fromInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') cargarClasesDetalle(profesor.id);
-            });
-            if(toInput) toInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') cargarClasesDetalle(profesor.id);
-            });
-            
-            if(modInput) {
-                modInput.addEventListener('input', () => {
-                    const activeType = document.querySelector('.metric-card-btn[style*="scale(1.05)"]')?.id.replace('metric-', '') || 'past';
-                    filtrarPorTipo(activeType);
-                });
-                modInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') cargarClasesDetalle(profesor.id);
-                });
-            }
-            
-            if(classInput) {
-                classInput.addEventListener('input', () => {
-                    const activeType = document.querySelector('.metric-card-btn[style*="scale(1.05)"]')?.id.replace('metric-', '') || 'past';
-                    filtrarPorTipo(activeType);
-                });
-                classInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') cargarClasesDetalle(profesor.id);
-                });
-            }
-        }, 100);
     };
 
     // ========== CARGAR CLASES ==========
@@ -355,8 +309,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
             currentProfessorLists = data.lists || { past: [], present: [], future: [] };
             
-            // Mostrar clases pasadas por defecto aplicando filtros locales si los hay
-            filtrarPorTipo('past');
+            // Mostrar clases pasadas por defecto
+            renderizarTablaReuniones(currentProfessorLists.past || [], 'past');
 
         } catch (e) {
             console.error(e);
@@ -388,20 +342,7 @@ document.addEventListener('DOMContentLoaded', function() {
             selectedCard.style.background = '#f5f3ff';
         }
 
-        // Aplicar filtros locales (Módulo y Nombre)
-        let filtered = currentProfessorLists[type] || [];
-        const modVal = document.getElementById('filter-module')?.value.toLowerCase() || '';
-        const classVal = document.getElementById('filter-class')?.value.toLowerCase() || '';
-
-        if (modVal || classVal) {
-            filtered = filtered.filter(m => {
-                const matchMod = !modVal || (m.reunion_id && m.reunion_id.toLowerCase().includes(modVal));
-                const matchClass = !classVal || (m.reunion && m.reunion.toLowerCase().includes(classVal));
-                return matchMod && matchClass;
-            });
-        }
-
-        renderizarTablaReuniones(filtered, type);
+        renderizarTablaReuniones(currentProfessorLists[type] || [], type);
     };
 
     // ========== RENDERIZAR TABLA DE REUNIONES ==========
@@ -430,9 +371,9 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
         
         meetings.forEach(m => {
-            const grabado = (m.grabado || m.has_recording) ? "✅" : "❌";
-            const inicio = m.inicio ? formatDateTimeWithSeconds(m.inicio) : "N/A";
-            const fin = m.fin ? formatTimeWithSeconds(m.fin) : "N/A";
+            const grabado = m.grabado ? '✅' : '❌';
+            const inicio = m.inicio ? formatDateTimeWithSeconds(m.inicio) : 'N/A';
+            const fin = m.fin ? formatTimeWithSeconds(m.fin) : 'N/A';
             const duracion = m.duracion || '00:00:00';
             
             let accionBtn = '';
@@ -568,18 +509,10 @@ document.addEventListener('DOMContentLoaded', function() {
     loadDashboardStats();
     setInterval(loadDashboardStats, 120000);
 
-    // Escuchar tecla Enter en el buscador
-    if (searchInput) {
-        searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                performSearch();
-            }
-        });
-    }
-
-    if (btnBuscar) {
-        btnBuscar.addEventListener('click', performSearch);
-    }
+    btnBuscar.addEventListener('click', performSearch);
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
 
     window.onclick = function(event) {
         const modal = document.getElementById('modal');
@@ -593,10 +526,3 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
 });
-
-
-
-
-
-
-

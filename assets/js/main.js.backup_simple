@@ -1,0 +1,308 @@
+// assets/js/main.js - VERSIÓN COMPLETA
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('profesor-search');
+    const btnBuscar = document.getElementById('btn-buscar');
+    const container = document.getElementById('profesores-container');
+    const resultCount = document.getElementById('result-count');
+    const syncOverlay = document.getElementById('premium-loader');
+    const progressBar = document.getElementById('loader-fill');
+    const timerSpan = document.getElementById('timer');
+
+    let syncInterval;
+    let seconds = 0;
+    let currentProfesores = [];
+    let currentProfessorLists = { past: [], present: [], future: [] };
+
+    const API_URL = 'http://localhost/zoom-monitor/api';
+
+    const updateLoaderText = (text) => {
+        const statusElement = document.querySelector('.loader-status');
+        if (statusElement) statusElement.textContent = text;
+    };
+
+    const performSearch = async () => {
+        const query = searchInput.value.trim();
+        if (!query) {
+            alert("Por favor ingresa un nombre o correo.");
+            return;
+        }
+
+        syncOverlay.style.display = 'flex';
+        updateLoaderText("Buscando profesores...");
+        seconds = 0;
+        if (progressBar) progressBar.style.width = '0%';
+        if (timerSpan) timerSpan.textContent = '0s';
+
+        const dashboardStats = document.getElementById('dashboard-stats');
+        const searchSection = document.querySelector('.search-section');
+        if (dashboardStats) dashboardStats.style.display = 'none';
+        if (searchSection) searchSection.style.display = 'none';
+
+        if (container) container.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 3rem;">Buscando...</td></tr>';
+
+        syncInterval = setInterval(() => {
+            seconds++;
+            if (timerSpan) timerSpan.textContent = `${seconds}s`;
+            if (progressBar && seconds < 5) progressBar.style.width = `${seconds * 20}%`;
+        }, 1000);
+
+        try {
+            const url = `${API_URL}/search_professor.php?query=${encodeURIComponent(query)}`;
+            console.log("Consultando:", url);
+
+            const response = await fetch(url, {
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log("Datos recibidos:", data);
+
+            clearInterval(syncInterval);
+            if (progressBar) progressBar.style.width = '100%';
+
+            setTimeout(() => {
+                if (syncOverlay) syncOverlay.style.display = 'none';
+
+                if (data.error) {
+                    alert("Error: " + data.error);
+                    return;
+                }
+
+                if (data.domain_stats) {
+                    const statTesa = document.getElementById('stat-tesa');
+                    const statItsa = document.getElementById('stat-itsa');
+                    if (statTesa) statTesa.textContent = data.domain_stats.tesa || 0;
+                    if (statItsa) statItsa.textContent = data.domain_stats.itsa || 0;
+                }
+
+                currentProfesores = data.profesores || [];
+                if (resultCount) resultCount.textContent = `${currentProfesores.length} resultados`;
+
+                const resultsSection = document.getElementById('results-section');
+                if (resultsSection) resultsSection.style.display = 'block';
+
+                if (!container) return;
+
+                if (currentProfesores.length === 0) {
+                    container.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 3rem;">No se encontraron profesores</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                currentProfesores.forEach((p, index) => {
+                    const pic = p.pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.profesor)}&background=4f46e5&color=fff`;
+                    html += `
+                        <tr class="animate-fade-in">
+                            <td style="text-align: center; padding: 1rem;">
+                                <img src="${pic}" style="width: 45px; height: 45px; border-radius: 12px; object-fit: cover;">
+                            </td>
+                            <td style="font-weight: 700;">${p.profesor}</td>
+                            <td>${p.email}</td>
+                            <td style="text-align: center;">
+                                <span class="badge-status ${p.status === 'active' ? 'badge-active' : 'badge-inactive'}">${p.status.toUpperCase()}</span>
+                            </td>
+                            <td style="text-align: center;">${p.timezone}</td>
+                            <td style="text-align: center;">
+                                <button onclick='verDetalles(${JSON.stringify(p)})' class="btn-action">💎 Consultar Clases</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                container.innerHTML = html;
+
+            }, 500);
+
+        } catch (e) {
+            clearInterval(syncInterval);
+            if (syncOverlay) syncOverlay.style.display = 'none';
+            alert(`Error: ${e.message}`);
+            console.error(e);
+        }
+    };
+
+    const loadDashboardStats = async () => {
+        try {
+            const response = await fetch(`${API_URL}/search_professor.php?query=*`, {
+                credentials: 'include'
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            if (data.domain_stats) {
+                const statTesa = document.getElementById('stat-tesa');
+                const statItsa = document.getElementById('stat-itsa');
+                if (statTesa) statTesa.textContent = data.domain_stats.tesa || 0;
+                if (statItsa) statItsa.textContent = data.domain_stats.itsa || 0;
+            }
+            const statLive = document.getElementById('stat-live');
+            if (statLive && data.live_count !== undefined) statLive.textContent = data.live_count;
+        } catch (e) {
+            console.error("Error stats:", e);
+        }
+    };
+
+    loadDashboardStats();
+    setInterval(loadDashboardStats, 120000);
+
+    btnBuscar.addEventListener('click', performSearch);
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
+
+    window.verDetalles = function(profesor) {
+        console.log("Profesor seleccionado:", profesor);
+        
+        if (!profesor || !profesor.id) {
+            alert("Error: No se pudo obtener el ID del profesor");
+            return;
+        }
+        
+        const modal = document.getElementById('modal');
+        const content = document.getElementById('modal-body');
+        
+        if (!modal || !content) {
+            alert("Error: No se encontró el modal");
+            return;
+        }
+        
+        modal.style.display = 'flex';
+        modal.classList.add('modal-consulta');
+
+        const pic = profesor.pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(profesor.profesor)}&background=fff&color=6366f1&size=128`;
+
+        content.innerHTML = `
+            <div class="modal-header-prof animate-fade-in" style="display: flex; align-items: center; gap: 2.5rem; text-align: left; padding: 2.5rem 4rem; position: relative; flex-wrap: wrap; justify-content: center;">
+                <img src="${pic}" class="prof-pic-large" style="width: 110px; height: 110px; border-radius: 30px; border: 5px solid rgba(255,255,255,0.4); box-shadow: 0 15px 30px rgba(0,0,0,0.3); object-fit: cover;">
+                <div style="flex: 1; min-width: 200px;">
+                    <h2 style="margin:0; font-size: 2.5rem; font-weight: 900;">${profesor.profesor}</h2>
+                    <div style="margin-top: 0.5rem; display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap;">
+                        <span style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-envelope"></i> ${profesor.email}
+                        </span>
+                        <span style="background: rgba(0,0,0,0.1); padding: 0.3rem 1rem; border-radius: 100px; font-size: 0.85rem;">
+                            <i class="fas fa-clock"></i> ${profesor.timezone}
+                        </span>
+                    </div>
+                </div>
+                <span class="modal-close" onclick="cerrarModal()">&times;</span>
+            </div>
+            
+            <div class="modal-body-prof animate-fade-in">
+                <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
+                    <button onclick="cargarClasesDetalle('${profesor.id}')" class="btn-buscar" style="flex: 1;">
+                        🔍 CONSULTAR CLASES
+                    </button>
+                </div>
+
+                <div id="desglose-container">
+                    <div id="desglose-content" class="table-responsive">
+                        <div style="text-align:center; padding: 3rem; color: #64748b;">
+                            Haz clic en CONSULTAR CLASES para ver el historial
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 2rem; text-align: center;">
+                    <button class="btn-cerrar-modal" onclick="cerrarModal()">Cerrar</button>
+                </div>
+            </div>
+        `;
+    };
+
+    window.cargarClasesDetalle = async function(userId) {
+        console.log("Cargando clases para userId:", userId);
+        
+        const content = document.getElementById('desglose-content');
+        if (!content) return;
+
+        content.innerHTML = '<div style="text-align:center; padding: 3rem;">Consultando Zoom...</div>';
+
+        try {
+            const url = `${API_URL}/get_professor_meetings.php?userId=${userId}`;
+            const response = await fetch(url, {
+                credentials: 'include'
+            });
+            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const data = await response.json();
+            console.log("Clases recibidas:", data);
+
+            if (data.error) {
+                content.innerHTML = `<div style="color: red; text-align:center; padding: 2rem;">Error: ${data.error}</div>`;
+                return;
+            }
+
+            const meetings = data.lists?.past || [];
+            
+            if (meetings.length === 0) {
+                content.innerHTML = '<div style="text-align:center; padding: 3rem;">No hay clases registradas</div>';
+                return;
+            }
+
+            let html = '<table style="width:100%; border-collapse: collapse;">';
+            html += `
+                <thead>
+                    <tr>
+                        <th style="padding: 1rem; text-align: left;">REUNIÓN</th>
+                        <th style="padding: 1rem; text-align: center;">INICIO</th>
+                        <th style="padding: 1rem; text-align: center;">DURACIÓN</th>
+                        <th style="padding: 1rem; text-align: center;">PARTICIPANTES</th>
+                    </tr>
+                </thead>
+                <tbody>
+            `;
+            
+            meetings.forEach(m => {
+                const fecha = m.inicio ? new Date(m.inicio).toLocaleString() : 'N/A';
+                html += `
+                    <tr>
+                        <td style="padding: 0.75rem; border-bottom: 1px solid #eee;">
+                            <div style="font-weight: 600;">${m.reunion}</div>
+                            <div style="font-size: 0.8rem; color: #666;">ID: ${m.reunion_id}</div>
+                        </td>
+                        <td style="padding: 0.75rem; border-bottom: 1px solid #eee; text-align: center;">${fecha}</td>
+                        <td style="padding: 0.75rem; border-bottom: 1px solid #eee; text-align: center;">${m.duracion}</td>
+                        <td style="padding: 0.75rem; border-bottom: 1px solid #eee; text-align: center;">${m.participantes}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            content.innerHTML = html;
+
+        } catch (e) {
+            console.error(e);
+            content.innerHTML = `<div style="color: red; text-align:center; padding: 2rem;">Error: ${e.message}</div>`;
+        }
+    };
+
+    window.cerrarModal = function() {
+        const modal = document.getElementById('modal');
+        if (modal) modal.style.display = 'none';
+    };
+
+    window.onclick = function(event) {
+        const modal = document.getElementById('modal');
+        if (event.target == modal) {
+            cerrarModal();
+        }
+    };
+
+    window.volverAlDashboard = function() {
+        const dashboardStats = document.getElementById('dashboard-stats');
+        const searchSection = document.querySelector('.search-section');
+        const resultsSection = document.getElementById('results-section');
+        
+        if (dashboardStats) dashboardStats.style.display = 'flex';
+        if (searchSection) searchSection.style.display = 'block';
+        if (resultsSection) resultsSection.style.display = 'none';
+        if (searchInput) searchInput.value = '';
+        
+        cerrarModal();
+    };
+
+});

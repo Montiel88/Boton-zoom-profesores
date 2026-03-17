@@ -1,0 +1,186 @@
+// assets/js/main.js - VERSIÓN CON MANEJO DE ERRORES
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('profesor-search');
+    const btnBuscar = document.getElementById('btn-buscar');
+    const container = document.getElementById('profesores-container');
+    const resultCount = document.getElementById('result-count');
+    const syncOverlay = document.getElementById('premium-loader');
+    const progressBar = document.getElementById('loader-fill');
+    const timerSpan = document.getElementById('timer');
+
+    if (!searchInput || !btnBuscar || !container) {
+        console.error("❌ Elementos del DOM no encontrados");
+        return;
+    }
+
+    let syncInterval;
+    let seconds = 0;
+    let currentProfesores = [];
+
+    const API_URL = 'http://localhost/zoom-monitor/api';
+
+    const updateLoaderText = (text) => {
+        const statusElement = document.querySelector('.loader-status');
+        if (statusElement) statusElement.textContent = text;
+    };
+
+    const performSearch = async () => {
+        const query = searchInput.value.trim();
+        if (!query) {
+            alert("Por favor ingresa un nombre o correo.");
+            return;
+        }
+
+        syncOverlay.style.display = 'flex';
+        updateLoaderText("Buscando profesores...");
+        seconds = 0;
+        if (progressBar) progressBar.style.width = '0%';
+        if (timerSpan) timerSpan.textContent = '0s';
+
+        const dashboardStats = document.getElementById('dashboard-stats');
+        const searchSection = document.querySelector('.search-section');
+        if (dashboardStats) dashboardStats.style.display = 'none';
+        if (searchSection) searchSection.style.display = 'none';
+
+        if (container) container.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 3rem;">Buscando...</td></tr>';
+
+        syncInterval = setInterval(() => {
+            seconds++;
+            if (timerSpan) timerSpan.textContent = `${seconds}s`;
+            if (progressBar && seconds < 5) progressBar.style.width = `${seconds * 20}%`;
+        }, 1000);
+
+        try {
+            const url = `${API_URL}/search_professor.php?query=${encodeURIComponent(query)}`;
+            console.log("📡 Consultando:", url);
+
+            const response = await fetch(url, {
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log("📦 Datos:", data);
+
+            clearInterval(syncInterval);
+            if (progressBar) progressBar.style.width = '100%';
+
+            setTimeout(() => {
+                if (syncOverlay) syncOverlay.style.display = 'none';
+
+                if (data.error) {
+                    alert("Error: " + data.error);
+                    return;
+                }
+
+                // Actualizar estadísticas si existen los elementos
+                if (data.domain_stats) {
+                    const statTesa = document.getElementById('stat-tesa');
+                    const statItsa = document.getElementById('stat-itsa');
+                    const statLive = document.getElementById('stat-live');
+                    
+                    if (statTesa) statTesa.textContent = data.domain_stats.tesa || 0;
+                    if (statItsa) statItsa.textContent = data.domain_stats.itsa || 0;
+                    if (statLive && data.live_count !== undefined) statLive.textContent = data.live_count;
+                }
+
+                currentProfesores = data.profesores || [];
+                if (resultCount) resultCount.textContent = `${currentProfesores.length} resultados`;
+
+                const resultsSection = document.getElementById('results-section');
+                if (resultsSection) resultsSection.style.display = 'block';
+
+                if (!container) return;
+
+                if (currentProfesores.length === 0) {
+                    container.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 3rem;">No se encontraron profesores</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                currentProfesores.forEach((p, index) => {
+                    const pic = p.pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.profesor)}&background=4f46e5&color=fff`;
+                    html += `
+                        <tr class="animate-fade-in">
+                            <td style="text-align: center; padding: 1rem;">
+                                <img src="${pic}" style="width: 45px; height: 45px; border-radius: 12px; object-fit: cover;">
+                            </td>
+                            <td style="font-weight: 700;">${p.profesor}</td>
+                            <td>${p.email}</td>
+                            <td style="text-align: center;">
+                                <span class="badge-status ${p.status === 'active' ? 'badge-active' : 'badge-inactive'}">${p.status.toUpperCase()}</span>
+                            </td>
+                            <td style="text-align: center;">${p.timezone}</td>
+                            <td style="text-align: center;">
+                                <button onclick='verDetalles(${index})' class="btn-action">💎 Consultar Clases</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                container.innerHTML = html;
+
+            }, 500);
+
+        } catch (e) {
+            clearInterval(syncInterval);
+            if (syncOverlay) syncOverlay.style.display = 'none';
+            alert(`Error: ${e.message}`);
+            console.error("❌ Error:", e);
+        }
+    };
+
+    const loadDashboardStats = async () => {
+        try {
+            const response = await fetch(`${API_URL}/search_professor.php?query=*`, {
+                credentials: 'include'
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            
+            // Solo actualizar si los elementos existen
+            if (data.domain_stats) {
+                const statTesa = document.getElementById('stat-tesa');
+                const statItsa = document.getElementById('stat-itsa');
+                if (statTesa) statTesa.textContent = data.domain_stats.tesa || 0;
+                if (statItsa) statItsa.textContent = data.domain_stats.itsa || 0;
+            }
+            
+            const statLive = document.getElementById('stat-live');
+            if (statLive && data.live_count !== undefined) {
+                statLive.textContent = data.live_count;
+            }
+        } catch (e) {
+            console.error("Error stats:", e);
+        }
+    };
+
+    loadDashboardStats();
+    setInterval(loadDashboardStats, 120000);
+
+    btnBuscar.addEventListener('click', performSearch);
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
+
+    window.verDetalles = function(index) {
+        const p = currentProfesores[index];
+        if (p) {
+            alert(`👤 ${p.profesor}\n📧 ${p.email}`);
+        }
+    };
+
+    window.volverAlDashboard = function() {
+        const dashboardStats = document.getElementById('dashboard-stats');
+        const searchSection = document.querySelector('.search-section');
+        const resultsSection = document.getElementById('results-section');
+        
+        if (dashboardStats) dashboardStats.style.display = 'flex';
+        if (searchSection) searchSection.style.display = 'block';
+        if (resultsSection) resultsSection.style.display = 'none';
+        if (searchInput) searchInput.value = '';
+    };
+
+});

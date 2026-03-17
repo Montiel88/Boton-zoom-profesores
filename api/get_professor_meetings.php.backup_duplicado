@@ -16,8 +16,8 @@ header('Content-Type: application/json');
 $userId = $_GET['userId'] ?? '';
 $meetingId = $_GET['meetingId'] ?? '';
 $type = $_GET['type'] ?? '';
-$from = !empty($_GET['from']) ? $_GET['from'] : '2020-01-01';
-$to = !empty($_GET['to']) ? $_GET['to'] : date('Y-m-d');
+$from = $_GET['from'] ?? date('Y-m-d', strtotime('-30 days'));
+$to = $_GET['to'] ?? date('Y-m-d');
 
 // Conectar a la BD
 $db = getDB();
@@ -98,29 +98,14 @@ try {
     if (!empty($dbMeetings)) {
         // Usar datos de la base de datos
         foreach ($dbMeetings as $m) {
-            $durationSeconds = 0;
-            $startTime = $m['start_time'];
-            $endTime = $m['end_time'];
-
-            if ($startTime && $endTime) {
-                $startTS = strtotime($startTime);
-                $endTS = strtotime($endTime);
-                $durationSeconds = $endTS - $startTS;
-                
-                // Si la diferencia es 0 pero hay una duración guardada, usar la guardada
-                if ($durationSeconds <= 0 && isset($m['duration'])) {
-                    $durationSeconds = intval($m['duration']);
-                }
-            } else {
-                $durationSeconds = intval($m['duration'] ?? 0);
-            }
+            $durationMin = $m['duration'] / 60; // convertir segundos a minutos
             
             $allPastMeetings[] = [
                 'reunion' => $m['topic'] ?? 'Sin título',
                 'reunion_id' => $m['reunion_id'] ?? 'N/A',
-                'inicio' => $startTime,
-                'duracion' => formatSecondsToHMS($durationSeconds),
-                'fin' => $endTime,
+                'inicio' => $m['start_time'],
+                'duracion' => formatExactDuration($durationMin),
+                'fin' => $m['end_time'],
                 'participantes' => $m['participants_count'] ?? 0,
                 'grabado' => $m['has_recording'] ? true : false,
                 'uuid' => $m['reunion_uuid'],
@@ -148,7 +133,7 @@ try {
                     'reunion' => ($m['topic'] ?? 'Sin Tema'),
                     'reunion_id' => $m['id'] ?? 'N/A',
                     'inicio' => $startTimeStr,
-                    'duracion' => formatSecondsToHMS(round($durationMin * 60)),
+                    'duracion' => formatExactDuration($durationMin),
                     'fin' => $endTimeStr,
                     'participantes' => 0,
                     'grabado' => false,
@@ -185,24 +170,22 @@ try {
         if (isset($pastMeetings['meetings']) && is_array($pastMeetings['meetings'])) {
             foreach ($pastMeetings['meetings'] as $m) {
                 $startTimeStr = $m['start_time'] ?? '';
-                $endTimeStr = $m['end_time'] ?? '';
+                $durationMin = floatval($m['duration'] ?? 0);
+                $startTS = strtotime($startTimeStr);
                 
-                $startTS = $startTimeStr ? strtotime($startTimeStr) : 0;
-                $endTS = $endTimeStr ? strtotime($endTimeStr) : 0;
-                
-                $durationSeconds = 0;
-                if ($startTS && $endTS) {
-                    $durationSeconds = $endTS - $startTS;
-                } else {
-                    $durationSeconds = round(floatval($m['duration'] ?? 0) * 60);
+                $endTime = '';
+                if ($startTS) {
+                    $durationSeconds = round($durationMin * 60);
+                    $endTS = $startTS + $durationSeconds;
+                    $endTime = date('Y-m-d H:i:s', $endTS);
                 }
 
                 $allPastMeetings[] = [
                     'reunion' => ($m['topic'] ?? 'Sin Tema'),
                     'reunion_id' => $m['id'] ?? 'N/A',
                     'inicio' => $startTimeStr,
-                    'duracion' => formatSecondsToHMS($durationSeconds),
-                    'fin' => $endTimeStr ?: date('Y-m-d H:i:s', $startTS + $durationSeconds),
+                    'duracion' => formatExactDuration($durationMin),
+                    'fin' => $endTime,
                     'participantes' => $m['participants_count'] ?? 0,
                     'grabado' => in_array((string)($m['id']), $recordingMeetingIds, true),
                     'uuid' => $m['uuid'] ?? '',
@@ -230,7 +213,7 @@ try {
                     'reunion' => ($m['topic'] ?? 'Sin Tema'),
                     'reunion_id' => $m['id'] ?? 'N/A',
                     'inicio' => $startTimeStr,
-                    'duracion' => formatSecondsToHMS(round($durationMin * 60)),
+                    'duracion' => formatExactDuration($durationMin),
                     'fin' => $endTimeStr,
                     'participantes' => 0,
                     'grabado' => in_array((string)($m['id']), $recordingMeetingIds, true),
@@ -279,13 +262,13 @@ try {
 }
 
 /**
- * Formatea segundos exactos en HH:MM:SS
+ * Formatea la duración exacta en HH:MM:SS
  */
-function formatSecondsToHMS($totalSeconds) {
+function formatExactDuration($durationMin) {
+    $totalSeconds = round($durationMin * 60);
     $hours = floor($totalSeconds / 3600);
     $minutes = floor(($totalSeconds % 3600) / 60);
     $seconds = $totalSeconds % 60;
     return sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
 }
 ?>
-
