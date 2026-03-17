@@ -1,0 +1,45 @@
+# Archivos de configuración local
+.env
+.env.local
+.env.*.local
+config/local.php
+
+# Archivos de sistema
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Directorios de cache/temp
+storage/sessions/
+!storage/sessions/.gitkeep
+logs/
+*.log
+temp/
+cache/
+
+# Archivos de IDE
+.vscode/
+.idea/
+*.sublime-*
+*.sublime-workspace
+
+# Archivos de backup
+*.bak
+*.backup
+*.backup*
+temp_*.php
+test_*.php
+debug_*.php
+
+# Archivos de base de datos
+*.sql
+*.sqlite
+
+# Dependencias (si usas composer)
+/vendor/
+/node_modules/
+
+# Archivos de compilación
+*.zip
+*.tar.gz
+*.rar
